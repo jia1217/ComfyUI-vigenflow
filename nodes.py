@@ -3,6 +3,7 @@
 One node, "VigenFlow: Text to Image (NPU)", drives every model listed under "models" in
 models.json (and the optional vigenflow_settings.json); see README.md.
 """
+import hashlib
 import os
 import sys
 import tempfile
@@ -455,7 +456,6 @@ class VigenFlowImageEdit:
         host = npu_worker.default_host_dir()
         models = npu_worker.available_models(host, "edit")
         specs = [npu_worker.model_spec(host, m) for m in models]
-        most = max([s["max_images"] for s in specs] or [1])
         step_help = "; ".join(f"{s['name']} {s['steps']}" for s in specs)
         image_help = "; ".join(f"{s['name']} 1-{s['max_images']}" for s in specs)
         return {
@@ -463,7 +463,6 @@ class VigenFlowImageEdit:
                 "model": (models, {"default": models[0] if models else None,
                                    "tooltip": "VigenFlow edit models (models.json); the engine and weights "
                                               "download on first use"}),
-                "image": ("IMAGE", {"tooltip": f"The image to edit (references: {image_help})"}),
                 "prompt": ("STRING", {"multiline": True, "default": "Make it a snowy winter scene",
                                       "tooltip": "What to change; a connected prompt_text replaces it"}),
                 **_size_preset_inputs(),
@@ -477,7 +476,8 @@ class VigenFlowImageEdit:
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
             "optional": {
-                **{f"image_{i}": ("IMAGE", {"tooltip": f"Reference image {i}"}) for i in range(2, most + 1)},
+                "references": ("VIGENFLOW_IMAGES", {"tooltip": f"From VigenFlow: Reference Images ({image_help})"}),
+                "image": ("IMAGE", {"tooltip": "One image to edit (instead of, or before, the references)"}),
                 "prompt_text": _optional_inputs()["prompt_text"],
                 "image_size": ("VIGENFLOW_SIZE", {"tooltip": "Connect VigenFlow: Edit Output Size (or Image Size); "
                                                              "replaces the size controls."}),
@@ -490,11 +490,13 @@ class VigenFlowImageEdit:
     FUNCTION = "edit"
     CATEGORY = "NPU"
 
-    def edit(self, model, image, prompt, aspect_ratio, size, width, height, keep_ratio, match_input, steps, seed,
+    def edit(self, model, prompt, aspect_ratio, size, width, height, keep_ratio, match_input, steps, seed,
              lora, lora_scale, lora_file, unique_id=None, lora_stack=None, prompt_text=None, image_size=None,
-             **references):
-        images = [image] + [references[k] for k in sorted(references, key=lambda k: int(k.split("_")[1]))
-                            if k.startswith("image_") and references[k] is not None]
+             references=None, image=None):
+        images = ([image[i:i + 1] for i in range(image.shape[0])] if image is not None else []) + list(references or [])
+        if not images:
+            raise ValueError("Connect VigenFlow: Reference Images to references (or an image to image)")
+        image = images[0]
         if image_size is not None:
             box_w, box_h, keep_ratio, match_input = _size_box(image_size)
         else:
@@ -598,6 +600,62 @@ class VigenFlowImageSize:
         return ((width, height),)
 
 
+class VigenFlowReferenceImages:
+    """The images for VigenFlow: Image Edit in one node: pick up to four files from ComfyUI's input
+    folder (or upload them), and/or connect images from other nodes. One wire to the edit node."""
+    SLOTS = 4
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        folder = folder_paths.get_input_directory() if folder_paths is not None else ""
+        files = sorted(f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))) if folder else []
+        if folder_paths is not None:
+            files = folder_paths.filter_files_content_types(files, ["image"])
+        return {
+            "required": {"image_1": (files, {"image_upload": True, "tooltip": "The image to edit"})},
+            "optional": {
+                **{f"image_{i}": (["none"] + files, {"image_upload": True, "default": "none",
+                                                      "tooltip": f"Reference {i} (none = not used)"})
+                   for i in range(2, cls.SLOTS + 1)},
+                "images": ("IMAGE", {"tooltip": "More references from other nodes; each image of the batch is one"}),
+            },
+        }
+
+    RETURN_TYPES = ("VIGENFLOW_IMAGES", "IMAGE")
+    RETURN_NAMES = ("references", "image")
+    OUTPUT_TOOLTIPS = ("All references, to VigenFlow: Image Edit", "The first reference, for example for Compare Images")
+    FUNCTION = "load"
+    CATEGORY = "NPU"
+
+    @staticmethod
+    def _names(kwargs):
+        return [kwargs[f"image_{i}"] for i in range(1, VigenFlowReferenceImages.SLOTS + 1)
+                if kwargs.get(f"image_{i}") not in (None, "", "none")]
+
+    def load(self, images=None, **kwargs):
+        from nodes import LoadImage
+
+        loaded = [LoadImage().load_image(name)[0][:1] for name in self._names(kwargs)]
+        if images is not None:
+            loaded += [images[i:i + 1] for i in range(images.shape[0])]
+        return (loaded, loaded[0])
+
+    @classmethod
+    def IS_CHANGED(cls, images=None, **kwargs):
+        digest = hashlib.sha256()
+        for name in cls._names(kwargs):
+            with open(folder_paths.get_annotated_filepath(name), "rb") as file:
+                digest.update(file.read())
+        return digest.hexdigest()
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        for name in cls._names(kwargs):
+            if not folder_paths.exists_annotated_filepath(name):
+                return f"Invalid image file: {name}"
+        return True
+
+
 class VigenFlowEditSize:
     """The output size for VigenFlow: Image Edit, with the VigenFlow Studio's two options: keep the
     input's aspect ratio inside the chosen size, or match the input's own size."""
@@ -694,6 +752,7 @@ NODE_CLASS_MAPPINGS = {
     "VigenFlowLoadLora": VigenFlowLoadLora,
     "VigenFlowImageSize": VigenFlowImageSize,
     "VigenFlowEditSize": VigenFlowEditSize,
+    "VigenFlowReferenceImages": VigenFlowReferenceImages,
     "VigenFlowCompare": VigenFlowCompare,
     "VigenFlowSaveImage": VigenFlowSaveImage,
 }
@@ -704,6 +763,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "VigenFlowLoadLora": "VigenFlow: Load LoRA",
     "VigenFlowImageSize": "VigenFlow: Image Size",
     "VigenFlowEditSize": "VigenFlow: Edit Output Size",
+    "VigenFlowReferenceImages": "VigenFlow: Reference Images",
     "VigenFlowCompare": "VigenFlow: Compare Images",
     "VigenFlowSaveImage": "VigenFlow: Save Image",
 }
