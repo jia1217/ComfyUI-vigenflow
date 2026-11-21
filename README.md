@@ -96,3 +96,12 @@ installs the engine from a downloaded copy (for computers without internet acces
 python install.py
 python worker.py --list
 ```
+
+## License
+
+The ComfyUI-vigenflow source code is licensed under the [Apache License 2.0](LICENSE).
+
+Model weights are **not** covered by this license. Each model and LoRA keeps its original
+license; Krea 2 Turbo (Krea 2 Community License, limited commercial use) and Qwen-Image 2.1 Turbo
+(Qwen Research License, research and evaluation only) are not Apache 2.0. See VigenFlow's
+[MODEL_LICENSES.md](https://github.com/jia1217/vigenflow/blob/main/MODEL_LICENSES.md) for each model.
