@@ -4,9 +4,9 @@ import { api } from "../../scripts/api.js";
 const widgetName = "vigenflow_denoising_runtime";
 const lineHeight = 20;   // runtime lines; the box grows with their number (4 or 5)
 const generatorNodes = new Set(["VigenFlowTextToImage", "VigenFlowImageEdit", "Flux2KleinNPU"]);
-const sizeNodes = new Set([...generatorNodes, "VigenFlowImageSize"]);
+const sizeNodes = new Set([...generatorNodes, "VigenFlowImageSize", "VigenFlowEditSize"]);
 const CUSTOM = "Custom";
-const INPUT_IMAGE = "Input image";   // edit node: size from the first reference image
+const INPUT_IMAGE = "Input image";   // removed edit size choice; saved edit nodes are converted
 
 const findWidget = (node, name) => node.widgets?.find((widget) => widget.name === name);
 
@@ -57,10 +57,16 @@ function updateSizeWidgets(node) {
     const fromSizeNode = inputLinked(node, "image_size");   // VigenFlow: Image Size, one wire
     if (ratio && fromInputs && ratio.value !== CUSTOM) ratio.value = CUSTOM;
     const custom = !ratio || ratio.value === CUSTOM;
-    const fromImage = ratio?.value === INPUT_IMAGE;
-    if (ratio) ratio.hidden = fromLatent || fromInputs || fromSizeNode;
+    // Edit size options (VigenFlow Studio): match_input uses the input's size, so the size controls
+    // and keep_ratio do not apply.
+    const keep = findWidget(node, "keep_ratio");
+    const match = findWidget(node, "match_input");
+    const fromImage = match?.value === true;
+    if (keep) keep.hidden = fromSizeNode || fromImage;
+    if (match) match.hidden = fromSizeNode;
+    if (ratio) ratio.hidden = fromLatent || fromInputs || fromSizeNode || fromImage;
     if (size) {
-        if (!custom && !fromImage) {
+        if (!custom) {
             const labels = sizesFor(size, ratio.value);
             size.options.values = labels;
             if (!labels.includes(size.value)) size.value = closestToOneMegapixel(labels);
@@ -69,7 +75,7 @@ function updateSizeWidgets(node) {
     }
     for (const name of ["width", "height"]) {
         const widget = findWidget(node, name);
-        if (widget) widget.hidden = fromLatent || fromSizeNode || !custom;
+        if (widget) widget.hidden = fromLatent || fromSizeNode || fromImage || !custom;
     }
     const [width] = node.size;
     node.setSize([width, node.computeSize()[1]]);
@@ -111,14 +117,21 @@ const OLD_LAYOUTS = {
         ["model", "prompt", ...SEED, "steps", "width", "height", "lora", "lora_scale", "keep_loaded", "lora_file"],
     ],
     VigenFlowImageSize: [["size", "width", "height"], ["width", "height"]],
+    VigenFlowImageEdit: [
+        ["model", "prompt", "aspect_ratio", "size", "width", "height", "steps", ...SEED, "lora", "lora_scale",
+         "lora_file"],
+    ],
 };
-const DEFAULTS = { lora: "none", lora_scale: 1, lora_file: "", keep_loaded: false };
+const DEFAULTS = { lora: "none", lora_scale: 1, lora_file: "", keep_loaded: false, keep_ratio: true,
+                   match_input: false };
 
 const isNumber = (v) => typeof v === "number";
 const KIND = {
     seed: isNumber, steps: isNumber, width: isNumber, height: isNumber, lora_scale: isNumber,
     keep_loaded: (v) => typeof v === "boolean",
-    aspect_ratio: (v) => v === CUSTOM || /^\d+:\d+$/.test(v),
+    keep_ratio: (v) => typeof v === "boolean",
+    match_input: (v) => typeof v === "boolean",
+    aspect_ratio: (v) => v === CUSTOM || v === INPUT_IMAGE || /^\d+:\d+$/.test(v),
     size: (v) => v === CUSTOM || parseSize(v) !== null,
 };
 
@@ -139,6 +152,9 @@ function migrateOldValues(node, info) {
     const names = layouts.find((layout) => fits(layout, values));
     if (!names) return;
     const byName = Object.fromEntries(names.map((name, i) => [name, i < values.length ? values[i] : DEFAULTS[name]]));
+    if (byName.aspect_ratio === INPUT_IMAGE) {   // edit node before the Studio size options
+        Object.assign(byName, { aspect_ratio: "1:1", size: DEFAULT_SIZE, keep_ratio: true, match_input: false });
+    }
     if (!("aspect_ratio" in byName)) {
         const old = byName.size;
         const sides = parseSize(old);
@@ -249,6 +265,64 @@ function rewireImageSize(graph) {
     }
 }
 
+// VigenFlow: Compare Images: the after image with the before image on top, cut where the mouse is.
+function hookCompare(nodeType) {
+    const onNodeCreated = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function (...args) {
+        const result = onNodeCreated?.apply(this, args);
+        const box = document.createElement("div");
+        Object.assign(box.style, { position: "relative", width: "100%", height: "100%", overflow: "hidden",
+                                   cursor: "ew-resize", userSelect: "none" });
+        const layer = () => {
+            const img = document.createElement("img");
+            Object.assign(img.style, { position: "absolute", inset: "0", width: "100%", height: "100%",
+                                       objectFit: "contain", pointerEvents: "none" });
+            box.append(img);
+            return img;
+        };
+        const after = layer();
+        const before = layer();
+        const line = document.createElement("div");
+        Object.assign(line.style, { position: "absolute", top: "0", bottom: "0", width: "2px",
+                                    background: "#fff", boxShadow: "0 0 3px #000", pointerEvents: "none" });
+        box.append(line);
+        const label = (text, side) => {
+            const tag = document.createElement("span");
+            tag.textContent = text;
+            Object.assign(tag.style, { position: "absolute", top: "6px", [side]: "8px", padding: "1px 6px",
+                                       background: "rgba(0,0,0,0.55)", color: "#fff", font: "12px sans-serif",
+                                       borderRadius: "3px", pointerEvents: "none" });
+            box.append(tag);
+        };
+        label("Before", "left");
+        label("After", "right");
+        const split = (share) => {
+            before.style.clipPath = `inset(0 ${100 - share}% 0 0)`;
+            line.style.left = `calc(${share}% - 1px)`;
+        };
+        box.addEventListener("pointermove", (event) => {
+            const rect = box.getBoundingClientRect();
+            split(Math.min(100, Math.max(0, (100 * (event.clientX - rect.left)) / rect.width)));
+        });
+        split(50);
+        this.addDOMWidget("vigenflow_compare", "div", box, { serialize: false, hideOnZoom: false,
+                                                             getMinHeight: () => 256 });
+        this.vigenflowCompare = { before, after };
+        this.setSize([Math.max(this.size[0], 480), Math.max(this.size[1], 520)]);
+        return result;
+    };
+    const onExecuted = nodeType.prototype.onExecuted;
+    nodeType.prototype.onExecuted = function (output) {
+        onExecuted?.call(this, output);
+        const url = (file) => api.apiURL(`/view?filename=${encodeURIComponent(file.filename)}` +
+            `&type=${file.type}&subfolder=${encodeURIComponent(file.subfolder ?? "")}&t=${Date.now()}`);
+        const [files] = output?.vigenflow_compare ?? [];
+        if (!files) return;
+        this.vigenflowCompare.before.src = url(files.before);
+        this.vigenflowCompare.after.src = url(files.after);
+    };
+}
+
 app.registerExtension({
     name: "VigenFlow.DenoisingRuntime",
 
@@ -257,6 +331,10 @@ app.registerExtension({
     },
 
     async beforeRegisterNodeDef(nodeType, nodeData) {
+        if (nodeData.name === "VigenFlowCompare") {
+            hookCompare(nodeType);
+            return;
+        }
         if (nodeData.name === "VigenFlowLoadLora") {
             await fetchLoraNames();
             hookLoadLora(nodeType);
@@ -267,11 +345,12 @@ app.registerExtension({
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function (...args) {
             const result = onNodeCreated?.apply(this, args);
-            const ratio = findWidget(this, "aspect_ratio");
-            if (ratio) {
-                const callback = ratio.callback;
-                ratio.callback = (...cbArgs) => {
-                    const value = callback?.apply(ratio, cbArgs);
+            for (const name of ["aspect_ratio", "match_input"]) {
+                const widget = findWidget(this, name);
+                if (!widget) continue;
+                const callback = widget.callback;
+                widget.callback = (...cbArgs) => {
+                    const value = callback?.apply(widget, cbArgs);
                     updateSizeWidgets(this);
                     return value;
                 };
@@ -332,8 +411,8 @@ app.registerExtension({
                 widget = this.addDOMWidget(widgetName, "div", element, {
                     serialize: false,
                     hideOnZoom: false,
-                    getMinHeight: () => this.vigenflowLines * lineHeight + 8,
-                    getMaxHeight: () => this.vigenflowLines * lineHeight + 8,
+                    getMinHeight: () => this.vigenflowLines * lineHeight + 16,
+                    getMaxHeight: () => this.vigenflowLines * lineHeight + 16,
                 });
                 widget.serialize = false;
                 this.setSize([this.size[0], Math.max(this.size[1], this.computeSize()[1])]);

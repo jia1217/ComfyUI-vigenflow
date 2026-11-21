@@ -54,6 +54,8 @@ research and evaluation only) download only after you accept their terms. Read t
 | **VigenFlow: Image Edit (NPU)** | `image` plus optional `image_2`–`image_4` references and what to change; the same controls |
 | **VigenFlow: Prompt** | A prompt box; connect to `prompt_text` (one prompt can feed several models) |
 | **VigenFlow: Image Size** | Aspect ratio and size; connect `image_size` |
+| **VigenFlow: Edit Output Size** | The edit output size with the VigenFlow Studio's options `keep_ratio` and `match_input`; connect `image_size` |
+| **VigenFlow: Compare Images** | `before` and `after` with a slider: move the mouse over it (works in the classic node display) |
 | **VigenFlow: Load LoRA** | One LoRA of one model with its strength; chain several into `lora_stack` |
 | **VigenFlow: Save Image** | Saves to `output_dir` from `vigenflow_settings.json`, else ComfyUI's output folder |
 
@@ -62,9 +64,10 @@ research and evaluation only) download only after you accept their terms. Read t
 **Steps:** 0 uses the model's default (FLUX.2 4, FLUX.1 4, Krea 2 8, Qwen-Image 8, Z-Image 8,
 FLUX.2 Edit 4).
 
-**Editing:** `aspect_ratio` = `Input image` (the default) keeps the first image's shape at about
-1 megapixel; any other size works too. Each reference is center-cropped to the output's shape and
-resized to it. FLUX.2 Klein 4B Edit uses the FLUX.2 Klein 4B weights (no extra download) and
+**Editing output size** (on Image Edit, or from Edit Output Size), as in the VigenFlow Studio:
+`keep_ratio` (default on) fits the first image's shape inside the chosen size (1024 × 1024 →
+long side 1024); `match_input` uses the first image's own size (up to 2048); with both off the
+chosen size is used as is. Each reference is center-cropped to the output's shape and resized to it. FLUX.2 Klein 4B Edit uses the FLUX.2 Klein 4B weights (no extra download) and
 its LoRAs (folder `flux2_klein_4B`).
 
 ## LoRAs

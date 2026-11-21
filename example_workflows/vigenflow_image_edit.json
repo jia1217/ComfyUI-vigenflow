@@ -1,15 +1,15 @@
 {
-  "id": "3ef876f0-01e9-4317-a472-758d712d5e7b",
+  "id": "ce7adc80-51a3-4719-b231-4648b8e722e3",
   "revision": 0,
-  "last_node_id": 5,
-  "last_link_id": 4,
+  "last_node_id": 7,
+  "last_link_id": 7,
   "nodes": [
     {
       "id": 1,
       "type": "LoadImage",
       "pos": [
-        40,
-        40
+        20,
+        20
       ],
       "size": [
         282.798828125,
@@ -44,7 +44,8 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            1
+            1,
+            6
           ]
         },
         {
@@ -70,12 +71,12 @@
       "id": 2,
       "type": "VigenFlowPrompt",
       "pos": [
-        40,
-        420
+        20,
+        400
       ],
       "size": [
         400,
-        180
+        150
       ],
       "flags": {},
       "order": 1,
@@ -113,17 +114,117 @@
     },
     {
       "id": 3,
+      "type": "VigenFlowEditSize",
+      "pos": [
+        20,
+        590
+      ],
+      "size": [
+        283.0826171875,
+        130
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "aspect_ratio",
+          "name": "aspect_ratio",
+          "type": "COMBO",
+          "widget": {
+            "name": "aspect_ratio"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "size",
+          "name": "size",
+          "type": "COMBO",
+          "widget": {
+            "name": "size"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "keep_ratio",
+          "name": "keep_ratio",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "keep_ratio"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "match_input",
+          "name": "match_input",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "match_input"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "image_size",
+          "name": "image_size",
+          "type": "VIGENFLOW_SIZE",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VigenFlowEditSize"
+      },
+      "widgets_values": [
+        "1:1",
+        "1024 × 1024",
+        1024,
+        1024,
+        true,
+        false
+      ],
+      "widgets_values_named": {
+        "aspect_ratio": "1:1",
+        "size": "1024 × 1024",
+        "width": 1024,
+        "height": 1024,
+        "keep_ratio": true,
+        "match_input": false
+      }
+    },
+    {
+      "id": 4,
       "type": "VigenFlowLoadLora",
       "pos": [
-        40,
-        640
+        20,
+        780
       ],
       "size": [
         270,
         106
       ],
       "flags": {},
-      "order": 2,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -167,7 +268,7 @@
           "name": "lora_stack",
           "type": "VIGENFLOW_LORA",
           "links": [
-            3
+            4
           ]
         }
       ],
@@ -186,18 +287,18 @@
       }
     },
     {
-      "id": 4,
+      "id": 5,
       "type": "VigenFlowImageEdit",
       "pos": [
-        480,
-        40
+        460,
+        20
       ],
       "size": [
         400,
-        274
+        250
       ],
       "flags": {},
-      "order": 3,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -239,14 +340,14 @@
           "name": "image_size",
           "shape": 7,
           "type": "VIGENFLOW_SIZE",
-          "link": null
+          "link": 3
         },
         {
           "localized_name": "lora_stack",
           "name": "lora_stack",
           "shape": 7,
           "type": "VIGENFLOW_LORA",
-          "link": 3
+          "link": 4
         },
         {
           "localized_name": "model",
@@ -303,6 +404,24 @@
           "link": null
         },
         {
+          "localized_name": "keep_ratio",
+          "name": "keep_ratio",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "keep_ratio"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "match_input",
+          "name": "match_input",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "match_input"
+          },
+          "link": null
+        },
+        {
           "localized_name": "steps",
           "name": "steps",
           "type": "INT",
@@ -354,7 +473,8 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            4
+            5,
+            7
           ]
         }
       ],
@@ -364,10 +484,12 @@
       "widgets_values": [
         "FLUX.2 Klein 4B Edit",
         "Make it a snowy winter scene",
-        "Input image",
+        "1:1",
         "1024 × 1024",
         1024,
         1024,
+        true,
+        false,
         0,
         42,
         "randomize",
@@ -378,10 +500,12 @@
       "widgets_values_named": {
         "model": "FLUX.2 Klein 4B Edit",
         "prompt": "Make it a snowy winter scene",
-        "aspect_ratio": "Input image",
+        "aspect_ratio": "1:1",
         "size": "1024 × 1024",
         "width": 1024,
         "height": 1024,
+        "keep_ratio": true,
+        "match_input": false,
         "steps": 0,
         "seed": 42,
         "control_after_generate": "randomize",
@@ -391,25 +515,25 @@
       }
     },
     {
-      "id": 5,
+      "id": 6,
       "type": "VigenFlowSaveImage",
       "pos": [
-        960,
-        40
+        920,
+        20
       ],
       "size": [
-        520,
-        600
+        420,
+        470
       ],
       "flags": {},
-      "order": 4,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
           "localized_name": "images",
           "name": "images",
           "type": "IMAGE",
-          "link": 4
+          "link": 5
         },
         {
           "localized_name": "filename_prefix",
@@ -438,6 +562,45 @@
       "widgets_values_named": {
         "filename_prefix": "vigenflow_edit"
       }
+    },
+    {
+      "id": 7,
+      "type": "VigenFlowCompare",
+      "pos": [
+        920,
+        520
+      ],
+      "size": [
+        480,
+        520
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "before",
+          "name": "before",
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "localized_name": "after",
+          "name": "after",
+          "type": "IMAGE",
+          "link": 7
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "VigenFlowCompare"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "widgets_values_named": {
+        "vigenflow_compare": ""
+      }
     }
   ],
   "links": [
@@ -445,7 +608,7 @@
       1,
       1,
       0,
-      4,
+      5,
       0,
       "IMAGE"
     ],
@@ -453,7 +616,7 @@
       2,
       2,
       0,
-      4,
+      5,
       4,
       "STRING"
     ],
@@ -461,16 +624,40 @@
       3,
       3,
       0,
-      4,
-      6,
-      "VIGENFLOW_LORA"
+      5,
+      5,
+      "VIGENFLOW_SIZE"
     ],
     [
       4,
       4,
       0,
       5,
+      6,
+      "VIGENFLOW_LORA"
+    ],
+    [
+      5,
+      5,
       0,
+      6,
+      0,
+      "IMAGE"
+    ],
+    [
+      6,
+      1,
+      0,
+      7,
+      0,
+      "IMAGE"
+    ],
+    [
+      7,
+      5,
+      0,
+      7,
+      1,
       "IMAGE"
     ]
   ],
@@ -480,8 +667,8 @@
     "ds": {
       "scale": 0.8264462809917354,
       "offset": [
-        0,
-        0
+        -440,
+        -10
       ]
     }
   },

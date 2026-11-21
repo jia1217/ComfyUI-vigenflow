@@ -68,30 +68,49 @@ def _custom_size_inputs():
     return {name: ("INT", options.copy()) for name in ("width", "height")}
 
 
-INPUT_IMAGE = "Input image"   # edit node: the first reference's shape at about 1 megapixel
-
-
-def _size_preset_inputs(input_image=False):
+def _size_preset_inputs():
     """aspect_ratio, size (filtered to the ratio in the browser), then width and height,
-    which are used when aspect_ratio is Custom. input_image adds the "Input image" choice."""
-    first = [INPUT_IMAGE] if input_image else []
+    which are used when aspect_ratio is Custom."""
     return {
-        "aspect_ratio": (first + RATIO_ORDER + [SIZE_CUSTOM], {
-            "default": first[0] if first else "1:1",
-            "tooltip": ("Input image: the first image's shape at about 1 megapixel. " if first else "") +
-                       "Width:height. Custom: type width and height (16-2048, multiples of 16)."}),
+        "aspect_ratio": (RATIO_ORDER + [SIZE_CUSTOM], {
+            "default": "1:1",
+            "tooltip": "Width:height. Custom: type width and height (16-2048, multiples of 16)."}),
         "size": (ALL_SIZES, {"default": _size_label(1024, 1024),
                              "tooltip": "Image size (width × height) for the chosen aspect ratio"}),
         **_custom_size_inputs(),
     }
 
 
-def _size_like(width, height):
-    """A size with this shape, about 1 megapixel, sides multiples of 16 up to 2048."""
-    scale = (1024 * 1024 / (width * height)) ** 0.5
-    w, h = width * scale, height * scale
-    shrink = min(1.0, 2048 / max(w, h))
-    return tuple(max(16, min(2048, int(round(v * shrink / 16)) * 16)) for v in (w, h))
+def _edit_toggle_inputs():
+    """The VigenFlow Studio's two edit size options."""
+    return {
+        "keep_ratio": ("BOOLEAN", {"default": True,
+                                   "tooltip": "Keep the input image's aspect ratio: fit it inside the chosen size"}),
+        "match_input": ("BOOLEAN", {"default": False,
+                                    "tooltip": "Output at the input image's own size (up to 2048, multiples of 16)"}),
+    }
+
+
+def _edit_output_size(image_w, image_h, box_w, box_h, keep_ratio, match_input):
+    """The edit output size, as the VigenFlow Studio computes it: match_input uses the input's size
+    (scaled down to fit 2048), keep_ratio fits the input's shape inside box_w x box_h, else the box.
+    Sides are rounded to multiples of 16 within 16..2048."""
+    if match_input:
+        scale = min(1.0, 2048 / max(image_w, image_h))
+    elif keep_ratio:
+        scale = min(box_w / image_w, box_h / image_h)
+    else:
+        return box_w, box_h
+    return tuple(max(16, min(2048, int(round(side * scale / 16)) * 16)) for side in (image_w, image_h))
+
+
+def _size_box(image_size):
+    """VIGENFLOW_SIZE -> (width, height, keep_ratio, match_input). VigenFlow: Image Size sends
+    (width, height); VigenFlow: Edit Output Size also sends the two edit options."""
+    if isinstance(image_size, dict):
+        return (*image_size["size"], image_size["keep_ratio"], image_size["match_input"])
+    width, height = image_size
+    return width, height, False, False
 
 
 def _prepare_references(images, width, height, folder):
@@ -418,7 +437,7 @@ class VigenFlowTextToImage:
     def generate(self, model, prompt, aspect_ratio, size, width, height, steps, seed, lora, lora_scale,
                  lora_file, keep_loaded=False, unique_id=None, lora_stack=None, prompt_text=None, image_size=None):
         if image_size is not None:
-            width, height = image_size
+            width, height = _size_box(image_size)[:2]
         else:
             width, height = _chosen_size(aspect_ratio, size, width, height)
         if prompt_text is not None:
@@ -447,7 +466,8 @@ class VigenFlowImageEdit:
                 "image": ("IMAGE", {"tooltip": f"The image to edit (references: {image_help})"}),
                 "prompt": ("STRING", {"multiline": True, "default": "Make it a snowy winter scene",
                                       "tooltip": "What to change; a connected prompt_text replaces it"}),
-                **_size_preset_inputs(input_image=True),
+                **_size_preset_inputs(),
+                **_edit_toggle_inputs(),
                 "steps": ("INT", {"default": 0, "min": 0, "max": 50,
                                   "tooltip": f"0 = the model's default ({step_help})"}),
                 "seed": ("INT", {"default": 42, "min": 0, "max": 2**31 - 1}),
@@ -459,8 +479,8 @@ class VigenFlowImageEdit:
             "optional": {
                 **{f"image_{i}": ("IMAGE", {"tooltip": f"Reference image {i}"}) for i in range(2, most + 1)},
                 "prompt_text": _optional_inputs()["prompt_text"],
-                "image_size": ("VIGENFLOW_SIZE", {"tooltip": "Connect VigenFlow: Image Size; replaces aspect_ratio, "
-                                                             "size, width and height."}),
+                "image_size": ("VIGENFLOW_SIZE", {"tooltip": "Connect VigenFlow: Edit Output Size (or Image Size); "
+                                                             "replaces the size controls."}),
                 "lora_stack": _optional_inputs()["lora_stack"],
             },
         }
@@ -470,16 +490,17 @@ class VigenFlowImageEdit:
     FUNCTION = "edit"
     CATEGORY = "NPU"
 
-    def edit(self, model, image, prompt, aspect_ratio, size, width, height, steps, seed, lora, lora_scale,
-             lora_file, unique_id=None, lora_stack=None, prompt_text=None, image_size=None, **references):
+    def edit(self, model, image, prompt, aspect_ratio, size, width, height, keep_ratio, match_input, steps, seed,
+             lora, lora_scale, lora_file, unique_id=None, lora_stack=None, prompt_text=None, image_size=None,
+             **references):
         images = [image] + [references[k] for k in sorted(references, key=lambda k: int(k.split("_")[1]))
                             if k.startswith("image_") and references[k] is not None]
         if image_size is not None:
-            width, height = image_size
-        elif aspect_ratio == INPUT_IMAGE:
-            width, height = _size_like(int(image.shape[2]), int(image.shape[1]))
+            box_w, box_h, keep_ratio, match_input = _size_box(image_size)
         else:
-            width, height = _chosen_size(aspect_ratio, size, width, height)
+            box_w, box_h = _chosen_size(aspect_ratio, size, width, height)
+        width, height = _edit_output_size(int(image.shape[2]), int(image.shape[1]), box_w, box_h,
+                                          keep_ratio, match_input)
         if prompt_text is not None:
             prompt = prompt_text
         return run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale, False,
@@ -577,6 +598,49 @@ class VigenFlowImageSize:
         return ((width, height),)
 
 
+class VigenFlowEditSize:
+    """The output size for VigenFlow: Image Edit, with the VigenFlow Studio's two options: keep the
+    input's aspect ratio inside the chosen size, or match the input's own size."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {**_size_preset_inputs(), **_edit_toggle_inputs()}}
+
+    RETURN_TYPES = ("VIGENFLOW_SIZE",)
+    RETURN_NAMES = ("image_size",)
+    FUNCTION = "get_size"
+    CATEGORY = "NPU"
+
+    def get_size(self, aspect_ratio, size, width, height, keep_ratio, match_input):
+        width, height = _chosen_size(aspect_ratio, size, width, height)
+        if not (16 <= width <= 2048 and 16 <= height <= 2048) or width % 16 or height % 16:
+            raise ValueError("width and height must be 16-2048 pixels and multiples of 16")
+        return ({"size": (width, height), "keep_ratio": keep_ratio, "match_input": match_input},)
+
+
+class VigenFlowCompare:
+    """Before/after view of two images with a slider (move the mouse over it); works in the
+    classic node display too. Saves nothing: both images go to ComfyUI's temp folder."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"before": ("IMAGE", {"tooltip": "For example the image you edited"}),
+                             "after": ("IMAGE", {"tooltip": "For example VigenFlow: Image Edit's result"})}}
+
+    RETURN_TYPES = ()
+    FUNCTION = "compare"
+    OUTPUT_NODE = True
+    CATEGORY = "NPU"
+
+    def compare(self, before, after):
+        from nodes import PreviewImage
+
+        preview = PreviewImage()
+        files = {"before": preview.save_images(before[:1], "vigenflow.compare.before")["ui"]["images"][0],
+                 "after": preview.save_images(after[:1], "vigenflow.compare.after")["ui"]["images"][0]}
+        return {"ui": {"vigenflow_compare": [files]}}   # nested, so ComfyUI does not add its own image preview
+
+
 class VigenFlowSaveImage:
     """Save images using output_dir from vigenflow_settings.json."""
 
@@ -629,6 +693,8 @@ NODE_CLASS_MAPPINGS = {
     "VigenFlowPrompt": VigenFlowPrompt,
     "VigenFlowLoadLora": VigenFlowLoadLora,
     "VigenFlowImageSize": VigenFlowImageSize,
+    "VigenFlowEditSize": VigenFlowEditSize,
+    "VigenFlowCompare": VigenFlowCompare,
     "VigenFlowSaveImage": VigenFlowSaveImage,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -637,5 +703,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "VigenFlowPrompt": "VigenFlow: Prompt",
     "VigenFlowLoadLora": "VigenFlow: Load LoRA",
     "VigenFlowImageSize": "VigenFlow: Image Size",
+    "VigenFlowEditSize": "VigenFlow: Edit Output Size",
+    "VigenFlowCompare": "VigenFlow: Compare Images",
     "VigenFlowSaveImage": "VigenFlow: Save Image",
 }
