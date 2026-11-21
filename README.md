@@ -21,6 +21,12 @@ Text encoder, denoising and VAE decoder all run on the NPU (about 8 s per 1024×
    the canvas, pick a model and click **Run**. The first image of each model downloads its
    weights into `ComfyUI/models/vigenflow/<model>/` (8–27 GB; progress in the ComfyUI console).
 
+**Start script:** `./start.sh` starts ComfyUI with these nodes (`--cpu` for ComfyUI's own
+PyTorch nodes; VigenFlow always runs on the NPU). Extra arguments go to ComfyUI, for example
+`./start.sh --port 8190`. Cloned into `ComfyUI/custom_nodes/`, it starts that ComfyUI; cloned
+anywhere else, it links this folder into `$COMFYUI_DIR/custom_nodes/` (default `~/ComfyUI`) first.
+It stops if another copy of the VigenFlow nodes is installed in the same ComfyUI.
+
 **Requirements:** Linux on x86-64, a Ryzen AI processor with an XDNA 2 NPU (`/dev/accel/accel0`),
 AMD XRT with the NPU driver, and Boost.ProgramOptions 1.83
 (`sudo apt install libboost-program-options1.83.0`). The node checks these and says what is missing.
