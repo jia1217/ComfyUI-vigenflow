@@ -52,7 +52,7 @@ research and evaluation only) download only after you accept their terms. Read t
 |---|---|
 | **VigenFlow: Text to Image (NPU)** | Model, prompt, size, steps, seed and LoRA; returns the image and shows the runtimes |
 | **VigenFlow: Image Edit (NPU)** | `references` (or one `image`) and what to change; the same controls |
-| **VigenFlow: Reference Images** | The edit images in one node: `image_1`–`image_4` from ComfyUI's input folder (Upload fills `image_1`; uploaded files are in every list) and/or `images` from other nodes; one wire to `references`, and `image` (the first) for Compare Images |
+| **VigenFlow: Reference Images** | The edit images in one node: four load-image cells (click or drop an image on a cell; **upload images** takes several files in order), or pick from the `image_1`–`image_4` lists, and/or `images` from other nodes; one wire to `references`, and `image` (the first) for Compare Images |
 | **VigenFlow: Prompt** | A prompt box; connect to `prompt_text` (one prompt can feed several models) |
 | **VigenFlow: Image Size** | Aspect ratio and size; connect `image_size` |
 | **VigenFlow: Edit Output Size** | The edit output size with the VigenFlow Studio's options `keep_ratio` and `match_input`; connect `image_size` |

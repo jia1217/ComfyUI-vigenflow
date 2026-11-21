@@ -602,7 +602,7 @@ class VigenFlowImageSize:
 
 class VigenFlowReferenceImages:
     """The images for VigenFlow: Image Edit in one node: pick up to four files from ComfyUI's input
-    folder (its upload button takes several files at once and fills image_1, image_2, ... in order),
+    folder (click or drop a file on a slot's cell, or upload several at once in order),
     and/or connect images from other nodes. One wire to the edit node."""
     SLOTS = 4
 

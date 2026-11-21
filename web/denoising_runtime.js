@@ -323,8 +323,8 @@ function hookCompare(nodeType) {
     };
 }
 
-// VigenFlow: Reference Images: one upload button for several files (they fill image_1, image_2, ...
-// in order) and a numbered preview of every chosen image.
+// VigenFlow: Reference Images: four load-image cells (click or drop a file on a cell to load that
+// slot), the chosen images shown in them, and one button for several files (filled in order).
 const REFERENCE_SLOTS = ["image_1", "image_2", "image_3", "image_4"];
 
 function hookReferenceImages(nodeType) {
@@ -338,17 +338,32 @@ function hookReferenceImages(nodeType) {
         const cells = slots.map((_, i) => {
             const cell = document.createElement("div");
             Object.assign(cell.style, { position: "relative", background: "rgba(0,0,0,0.25)", borderRadius: "4px",
-                                        overflow: "hidden", minHeight: "0" });
+                                        overflow: "hidden", minHeight: "0", cursor: "pointer",
+                                        border: "1px dashed rgba(255,255,255,0.25)", boxSizing: "border-box" });
+            cell.title = `Click or drop an image to load image_${i + 1}`;
             const img = document.createElement("img");
-            Object.assign(img.style, { width: "100%", height: "100%", objectFit: "contain", display: "block" });
+            Object.assign(img.style, { width: "100%", height: "100%", objectFit: "contain", display: "block",
+                                       pointerEvents: "none" });
+            const hint = document.createElement("span");
+            hint.textContent = `click or drop image ${i + 1}`;
+            Object.assign(hint.style, { position: "absolute", inset: "0", display: "flex", alignItems: "center",
+                                        justifyContent: "center", color: "rgba(255,255,255,0.45)",
+                                        font: "11px sans-serif", textAlign: "center", pointerEvents: "none" });
             const tag = document.createElement("span");
             tag.textContent = String(i + 1);
             Object.assign(tag.style, { position: "absolute", top: "3px", left: "5px", padding: "0 5px",
                                        background: "rgba(0,0,0,0.6)", color: "#fff", font: "11px sans-serif",
-                                       borderRadius: "3px" });
-            cell.append(img, tag);
+                                       borderRadius: "3px", pointerEvents: "none" });
+            cell.append(img, hint, tag);
+            cell.addEventListener("click", () => { target = i; picker.multiple = false; picker.click(); });
+            cell.addEventListener("dragover", (event) => { event.preventDefault(); event.stopPropagation(); });
+            cell.addEventListener("drop", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.dataTransfer?.files?.length) upload(event.dataTransfer.files, i).catch((e) => alert(e.message));
+            });
             grid.append(cell);
-            return { cell, img };
+            return { cell, img, hint };
         });
         const refresh = () => {
             slots.forEach((widget, i) => {
@@ -356,6 +371,7 @@ function hookReferenceImages(nodeType) {
                 const used = name && name !== "none";
                 cells[i].img.src = used ? api.apiURL(`/view?filename=${encodeURIComponent(name)}&type=input`) : "";
                 cells[i].img.style.visibility = used ? "visible" : "hidden";
+                cells[i].hint.style.display = used ? "none" : "flex";
             });
         };
         for (const widget of slots) {
@@ -366,13 +382,14 @@ function hookReferenceImages(nodeType) {
                 return value;
             };
         }
+        let target = null;   // a cell's slot, or null: several files fill the slots in order
         const picker = document.createElement("input");
         Object.assign(picker, { type: "file", accept: "image/*", multiple: true });
         picker.style.display = "none";
         document.body.append(picker);
-        const upload = async (files) => {
+        const upload = async (files, slot = null) => {
             const names = [];
-            for (const file of [...files].slice(0, slots.length)) {
+            for (const file of [...files].slice(0, slot === null ? slots.length : 1)) {
                 const body = new FormData();
                 body.append("image", file);
                 const response = await api.fetchApi("/upload/image", { method: "POST", body });
@@ -385,16 +402,21 @@ function hookReferenceImages(nodeType) {
                 const values = widget.options.values;
                 for (const name of names) if (!values.includes(name)) values.push(name);
             }
-            slots.forEach((widget, i) => { widget.value = names[i] ?? (i === 0 ? widget.value : "none"); });
+            if (slot !== null) slots[slot].value = names[0];
+            else slots.forEach((widget, i) => { widget.value = names[i] ?? (i === 0 ? widget.value : "none"); });
             refresh();
             this.setDirtyCanvas(true, true);
         };
         picker.addEventListener("change", () => {
-            upload(picker.files).catch((error) => alert(error.message)).finally(() => { picker.value = ""; });
+            upload(picker.files, target).catch((error) => alert(error.message)).finally(() => { picker.value = ""; });
         });
-        this.addWidget("button", "upload images (1-4, in order)", null, () => picker.click(), { serialize: false });
+        this.addWidget("button", "upload images (1-4, in order)", null, () => {
+            target = null;
+            picker.multiple = true;
+            picker.click();
+        }, { serialize: false });
         this.addDOMWidget("vigenflow_references", "div", grid, { serialize: false, hideOnZoom: false,
-                                                                 getMinHeight: () => 220 });
+                                                                 getMinHeight: () => 260 });
         this.vigenflowReferences = { refresh, upload };
         const onRemoved = this.onRemoved;
         this.onRemoved = function () {
