@@ -17,8 +17,9 @@ Text encoder, denoising and VAE decoder all run on the NPU (about 8 s per 1024×
    against its published SHA256) into `ComfyUI-vigenflow/engine/`. ComfyUI-Manager installs it
    right away; to do that by hand, run `python install.py` in this folder.
 
-3. Drag [`workflows/vigenflow_text_to_image.json`](workflows/vigenflow_text_to_image.json) onto
-   the canvas, pick a model and click **Run**. The first image of each model downloads its
+3. Open **Templates → Extensions → ComfyUI-vigenflow** and choose **vigenflow_text_to_image**
+   (or drag [`example_workflows/vigenflow_text_to_image.json`](example_workflows/vigenflow_text_to_image.json)
+   onto the canvas), pick a model and click **Run**. The first image of each model downloads its
    weights into `ComfyUI/models/vigenflow/<model>/` (8–27 GB; progress in the ComfyUI console).
 
 **Start script:** `./start.sh` starts ComfyUI with these nodes (`--cpu` for ComfyUI's own
