@@ -602,7 +602,8 @@ class VigenFlowImageSize:
 
 class VigenFlowReferenceImages:
     """The images for VigenFlow: Image Edit in one node: pick up to four files from ComfyUI's input
-    folder (or upload them), and/or connect images from other nodes. One wire to the edit node."""
+    folder (its upload button takes several files at once and fills image_1, image_2, ... in order),
+    and/or connect images from other nodes. One wire to the edit node."""
     SLOTS = 4
 
     @classmethod
@@ -612,9 +613,9 @@ class VigenFlowReferenceImages:
         if folder_paths is not None:
             files = folder_paths.filter_files_content_types(files, ["image"])
         return {
-            "required": {"image_1": (files, {"image_upload": True, "tooltip": "The image to edit"})},
+            "required": {"image_1": (files, {"tooltip": "The image to edit"})},
             "optional": {
-                **{f"image_{i}": (["none"] + files, {"image_upload": True, "default": "none",
+                **{f"image_{i}": (["none"] + files, {"default": "none",
                                                       "tooltip": f"Reference {i} (none = not used)"})
                    for i in range(2, cls.SLOTS + 1)},
                 "images": ("IMAGE", {"tooltip": "More references from other nodes; each image of the batch is one"}),

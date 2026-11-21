@@ -323,6 +323,95 @@ function hookCompare(nodeType) {
     };
 }
 
+// VigenFlow: Reference Images: one upload button for several files (they fill image_1, image_2, ...
+// in order) and a numbered preview of every chosen image.
+const REFERENCE_SLOTS = ["image_1", "image_2", "image_3", "image_4"];
+
+function hookReferenceImages(nodeType) {
+    const onNodeCreated = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function (...args) {
+        const result = onNodeCreated?.apply(this, args);
+        const slots = REFERENCE_SLOTS.map((name) => findWidget(this, name)).filter(Boolean);
+        const grid = document.createElement("div");
+        Object.assign(grid.style, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px",
+                                    width: "100%", height: "100%", boxSizing: "border-box", padding: "2px" });
+        const cells = slots.map((_, i) => {
+            const cell = document.createElement("div");
+            Object.assign(cell.style, { position: "relative", background: "rgba(0,0,0,0.25)", borderRadius: "4px",
+                                        overflow: "hidden", minHeight: "0" });
+            const img = document.createElement("img");
+            Object.assign(img.style, { width: "100%", height: "100%", objectFit: "contain", display: "block" });
+            const tag = document.createElement("span");
+            tag.textContent = String(i + 1);
+            Object.assign(tag.style, { position: "absolute", top: "3px", left: "5px", padding: "0 5px",
+                                       background: "rgba(0,0,0,0.6)", color: "#fff", font: "11px sans-serif",
+                                       borderRadius: "3px" });
+            cell.append(img, tag);
+            grid.append(cell);
+            return { cell, img };
+        });
+        const refresh = () => {
+            slots.forEach((widget, i) => {
+                const name = widget.value;
+                const used = name && name !== "none";
+                cells[i].img.src = used ? api.apiURL(`/view?filename=${encodeURIComponent(name)}&type=input`) : "";
+                cells[i].img.style.visibility = used ? "visible" : "hidden";
+            });
+        };
+        for (const widget of slots) {
+            const callback = widget.callback;
+            widget.callback = (...cbArgs) => {
+                const value = callback?.apply(widget, cbArgs);
+                refresh();
+                return value;
+            };
+        }
+        const picker = document.createElement("input");
+        Object.assign(picker, { type: "file", accept: "image/*", multiple: true });
+        picker.style.display = "none";
+        document.body.append(picker);
+        const upload = async (files) => {
+            const names = [];
+            for (const file of [...files].slice(0, slots.length)) {
+                const body = new FormData();
+                body.append("image", file);
+                const response = await api.fetchApi("/upload/image", { method: "POST", body });
+                if (!response.ok) throw new Error(`Upload of ${file.name} failed: ${response.status}`);
+                const data = await response.json();
+                names.push(data.subfolder ? `${data.subfolder}/${data.name}` : data.name);
+            }
+            if (!names.length) return;
+            for (const widget of slots) {   // every list gets the new files
+                const values = widget.options.values;
+                for (const name of names) if (!values.includes(name)) values.push(name);
+            }
+            slots.forEach((widget, i) => { widget.value = names[i] ?? (i === 0 ? widget.value : "none"); });
+            refresh();
+            this.setDirtyCanvas(true, true);
+        };
+        picker.addEventListener("change", () => {
+            upload(picker.files).catch((error) => alert(error.message)).finally(() => { picker.value = ""; });
+        });
+        this.addWidget("button", "upload images (1-4, in order)", null, () => picker.click(), { serialize: false });
+        this.addDOMWidget("vigenflow_references", "div", grid, { serialize: false, hideOnZoom: false,
+                                                                 getMinHeight: () => 220 });
+        this.vigenflowReferences = { refresh, upload };
+        const onRemoved = this.onRemoved;
+        this.onRemoved = function () {
+            picker.remove();
+            return onRemoved?.apply(this, arguments);
+        };
+        this.setSize([Math.max(this.size[0], 360), Math.max(this.size[1], this.computeSize()[1])]);
+        refresh();
+        return result;
+    };
+    const onConfigure = nodeType.prototype.onConfigure;
+    nodeType.prototype.onConfigure = function (info) {
+        onConfigure?.call(this, info);
+        this.vigenflowReferences?.refresh();
+    };
+}
+
 app.registerExtension({
     name: "VigenFlow.DenoisingRuntime",
 
@@ -331,6 +420,10 @@ app.registerExtension({
     },
 
     async beforeRegisterNodeDef(nodeType, nodeData) {
+        if (nodeData.name === "VigenFlowReferenceImages") {
+            hookReferenceImages(nodeType);
+            return;
+        }
         if (nodeData.name === "VigenFlowCompare") {
             hookCompare(nodeType);
             return;
