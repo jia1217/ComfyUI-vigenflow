@@ -1,0 +1,50 @@
+{
+  "engine": {
+    "version": "0.2.0-beta.5",
+    "url": "https://github.com/jia1217/vigenflow/releases/download/v0.2.0-beta.5/vgf_0.2.0-beta.5_ubuntu_amd64.zip",
+    "sha256": "f7dba7d2cc2704aceda4562a01c2a90705c46f079b05ddc49e0ede3e32d45648",
+    "archive_root": "vgf_0.2.0-beta.5_ubuntu_amd64"
+  },
+  "models": {
+    "FLUX.2 Klein 4B": {
+      "id": "flux2_klein_4B",
+      "npu_files": "all_npu_files/flux2_klein_4B/base",
+      "steps": 4,
+      "allowed_steps": [4]
+    },
+    "FLUX.1 Schnell": {
+      "id": "flux1_schnell",
+      "npu_files": "all_npu_files/flux1_schnell",
+      "steps": 4,
+      "min_steps": 1,
+      "max_steps": 4
+    },
+    "Krea 2 Turbo": {
+      "id": "krea2_turbo",
+      "npu_files": "all_npu_files/krea2_turbo",
+      "steps": 8,
+      "min_steps": 1,
+      "max_steps": 50,
+      "license": {
+        "name": "Krea 2 Community License",
+        "url": "https://huggingface.co/krea/Krea-2-Turbo"
+      }
+    },
+    "Qwen-Image 2.1 Turbo": {
+      "id": "qwen_image_2_1_turbo",
+      "npu_files": "all_npu_files/qwen_image/base",
+      "steps": 8,
+      "allowed_steps": [8],
+      "license": {
+        "name": "Qwen Research License Agreement (research and evaluation only)",
+        "url": "https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo"
+      }
+    },
+    "Z-Image Turbo": {
+      "id": "z_image_turbo",
+      "npu_files": "all_npu_files/z_image_turbo",
+      "steps": 8,
+      "allowed_steps": [4, 8]
+    }
+  }
+}

@@ -1,0 +1,5 @@
+# Downloaded by the node (engine release) and per-user settings
+engine/
+vigenflow_settings.json
+__pycache__/
+*.pyc
