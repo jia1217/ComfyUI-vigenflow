@@ -19,7 +19,8 @@ Everything runs on the NPU: about 8 s per 1024×1024 FLUX.2 image, 17 s per FLUX
    right away; to do that by hand, run `python install.py` in this folder.
 
 3. Open **Templates → Extensions → ComfyUI-vigenflow** and choose **vigenflow_text_to_image**
-   or **vigenflow_image_edit** (it edits ComfyUI's `input/example.png`)
+   or **vigenflow_image_edit** (it edits ComfyUI's `input/example.png`; add a Load Image node to
+   Edit Prompt's `image_2` for a second reference)
    (or drag [`example_workflows/vigenflow_text_to_image.json`](example_workflows/vigenflow_text_to_image.json)
    onto the canvas), pick a model and click **Run**. The first image of each model downloads its
    weights into `ComfyUI/models/vigenflow/<model>/` (8–27 GB; progress in the ComfyUI console).
@@ -51,7 +52,8 @@ research and evaluation only) download only after you accept their terms. Read t
 | Node | Use |
 |---|---|
 | **VigenFlow: Text to Image (NPU)** | Model, prompt, size, steps, seed and LoRA; returns the image and shows the runtimes |
-| **VigenFlow: Image Edit (NPU)** | `references` (or one `image`) and what to change; the same controls |
+| **VigenFlow: Image Edit (NPU)** | `edit_input` (or `references` / one `image` plus its own prompt box); the same controls |
+| **VigenFlow: Edit Prompt** | The edit prompt and its images in one node: connect a Load Image node (each reference its own node) to `image_1`–`image_4`; one wire to `edit_input`, and `image` (the first) for Compare Images |
 | **VigenFlow: Reference Images** | The edit images in one node: four load-image cells (click or drop an image on a cell; **upload images** takes several files in order), or pick from the `image_1`–`image_4` lists, and/or `images` from other nodes; one wire to `references`, and `image` (the first) for Compare Images |
 | **VigenFlow: Prompt** | A prompt box; connect to `prompt_text` (one prompt can feed several models) |
 | **VigenFlow: Image Size** | Aspect ratio and size; connect `image_size` |

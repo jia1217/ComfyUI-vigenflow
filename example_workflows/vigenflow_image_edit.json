@@ -1,72 +1,35 @@
 {
-  "id": "55ed6e9e-9877-4721-adcd-ce5a761d106b",
+  "id": "bfc912c2-1752-4781-8849-8aef55f9ce3b",
   "revision": 0,
   "last_node_id": 7,
   "last_link_id": 7,
   "nodes": [
     {
       "id": 1,
-      "type": "VigenFlowReferenceImages",
+      "type": "LoadImage",
       "pos": [
         20,
         20
       ],
       "size": [
-        360,
-        470
+        282.798828125,
+        102
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [
         {
-          "localized_name": "images",
-          "name": "images",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": null
-        },
-        {
-          "localized_name": "image_1",
-          "name": "image_1",
+          "localized_name": "image",
+          "name": "image",
           "type": "COMBO",
           "widget": {
-            "name": "image_1"
+            "name": "image"
           },
           "link": null
         },
         {
-          "localized_name": "image_2",
-          "name": "image_2",
-          "shape": 7,
-          "type": "COMBO",
-          "widget": {
-            "name": "image_2"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "image_3",
-          "name": "image_3",
-          "shape": 7,
-          "type": "COMBO",
-          "widget": {
-            "name": "image_3"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "image_4",
-          "name": "image_4",
-          "shape": 7,
-          "type": "COMBO",
-          "widget": {
-            "name": "image_4"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "upload",
+          "localized_name": "choose file to upload",
           "name": "upload",
           "type": "IMAGEUPLOAD",
           "widget": {
@@ -77,11 +40,92 @@
       ],
       "outputs": [
         {
-          "localized_name": "references",
-          "name": "references",
-          "type": "VIGENFLOW_IMAGES",
+          "localized_name": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
           "links": [
             1
+          ]
+        },
+        {
+          "localized_name": "MASK",
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "example.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "example.png",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 2,
+      "type": "VigenFlowEditPrompt",
+      "pos": [
+        340,
+        20
+      ],
+      "size": [
+        360,
+        220
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "image_1",
+          "name": "image_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "localized_name": "image_2",
+          "name": "image_2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "localized_name": "image_3",
+          "name": "image_3",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "localized_name": "image_4",
+          "name": "image_4",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "edit_input",
+          "name": "edit_input",
+          "type": "VIGENFLOW_EDIT",
+          "links": [
+            2
           ]
         },
         {
@@ -94,73 +138,21 @@
         }
       ],
       "properties": {
-        "Node name for S&R": "VigenFlowReferenceImages"
-      },
-      "widgets_values": [
-        "example.png",
-        "none",
-        "none",
-        "none"
-      ],
-      "widgets_values_named": {
-        "image_1": "example.png",
-        "image_2": "none",
-        "image_3": "none",
-        "image_4": "none",
-        "upload": "image"
-      }
-    },
-    {
-      "id": 2,
-      "type": "VigenFlowPrompt",
-      "pos": [
-        20,
-        480
-      ],
-      "size": [
-        400,
-        150
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [
-        {
-          "localized_name": "text",
-          "name": "text",
-          "type": "STRING",
-          "widget": {
-            "name": "text"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "localized_name": "prompt",
-          "name": "prompt",
-          "type": "STRING",
-          "links": [
-            2
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "VigenFlowPrompt"
+        "Node name for S&R": "VigenFlowEditPrompt"
       },
       "widgets_values": [
         "Turn this drawing into a photorealistic photo"
       ],
       "widgets_values_named": {
-        "text": "Turn this drawing into a photorealistic photo"
+        "prompt": "Turn this drawing into a photorealistic photo"
       }
     },
     {
       "id": 3,
       "type": "VigenFlowEditSize",
       "pos": [
-        20,
-        670
+        340,
+        280
       ],
       "size": [
         283.0826171875,
@@ -259,8 +251,8 @@
       "id": 4,
       "type": "VigenFlowLoadLora",
       "pos": [
-        20,
-        860
+        340,
+        470
       ],
       "size": [
         270,
@@ -333,23 +325,30 @@
       "id": 5,
       "type": "VigenFlowImageEdit",
       "pos": [
-        470,
+        740,
         20
       ],
       "size": [
         400,
-        210
+        230
       ],
       "flags": {},
       "order": 4,
       "mode": 0,
       "inputs": [
         {
+          "localized_name": "edit_input",
+          "name": "edit_input",
+          "shape": 7,
+          "type": "VIGENFLOW_EDIT",
+          "link": 2
+        },
+        {
           "localized_name": "references",
           "name": "references",
           "shape": 7,
           "type": "VIGENFLOW_IMAGES",
-          "link": 1
+          "link": null
         },
         {
           "localized_name": "image",
@@ -363,7 +362,7 @@
           "name": "prompt_text",
           "shape": 7,
           "type": "STRING",
-          "link": 2
+          "link": null
         },
         {
           "localized_name": "image_size",
@@ -548,7 +547,7 @@
       "id": 6,
       "type": "VigenFlowSaveImage",
       "pos": [
-        930,
+        1180,
         20
       ],
       "size": [
@@ -597,7 +596,7 @@
       "id": 7,
       "type": "VigenFlowCompare",
       "pos": [
-        930,
+        1180,
         520
       ],
       "size": [
@@ -638,24 +637,24 @@
       1,
       1,
       0,
-      5,
+      2,
       0,
-      "VIGENFLOW_IMAGES"
+      "IMAGE"
     ],
     [
       2,
       2,
       0,
       5,
-      2,
-      "STRING"
+      0,
+      "VIGENFLOW_EDIT"
     ],
     [
       3,
       3,
       0,
       5,
-      3,
+      4,
       "VIGENFLOW_SIZE"
     ],
     [
@@ -663,7 +662,7 @@
       4,
       0,
       5,
-      4,
+      5,
       "VIGENFLOW_LORA"
     ],
     [
@@ -676,7 +675,7 @@
     ],
     [
       6,
-      1,
+      2,
       1,
       7,
       0,
@@ -695,7 +694,7 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.8264462809917354,
+      "scale": 1,
       "offset": [
         0,
         0

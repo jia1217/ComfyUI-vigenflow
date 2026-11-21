@@ -476,6 +476,8 @@ class VigenFlowImageEdit:
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
             "optional": {
+                "edit_input": ("VIGENFLOW_EDIT", {"tooltip": "From VigenFlow: Edit Prompt: the prompt and its images "
+                                                             "in one wire (replaces the prompt box)"}),
                 "references": ("VIGENFLOW_IMAGES", {"tooltip": f"From VigenFlow: Reference Images ({image_help})"}),
                 "image": ("IMAGE", {"tooltip": "One image to edit (instead of, or before, the references)"}),
                 "prompt_text": _optional_inputs()["prompt_text"],
@@ -492,10 +494,12 @@ class VigenFlowImageEdit:
 
     def edit(self, model, prompt, aspect_ratio, size, width, height, keep_ratio, match_input, steps, seed,
              lora, lora_scale, lora_file, unique_id=None, lora_stack=None, prompt_text=None, image_size=None,
-             references=None, image=None):
-        images = ([image[i:i + 1] for i in range(image.shape[0])] if image is not None else []) + list(references or [])
+             references=None, image=None, edit_input=None):
+        images = (list(edit_input["images"]) if edit_input is not None else []) + \
+                 ([image[i:i + 1] for i in range(image.shape[0])] if image is not None else []) + list(references or [])
         if not images:
-            raise ValueError("Connect VigenFlow: Reference Images to references (or an image to image)")
+            raise ValueError("Connect VigenFlow: Edit Prompt to edit_input, Reference Images to references, "
+                             "or an image to image")
         image = images[0]
         if image_size is not None:
             box_w, box_h, keep_ratio, match_input = _size_box(image_size)
@@ -505,6 +509,8 @@ class VigenFlowImageEdit:
                                           keep_ratio, match_input)
         if prompt_text is not None:
             prompt = prompt_text
+        if edit_input is not None:
+            prompt = edit_input["prompt"]
         return run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale, False,
                                  lora_file, unique_id, None, lora_stack, images)
 
@@ -598,6 +604,39 @@ class VigenFlowImageSize:
         if not (16 <= width <= 2048 and 16 <= height <= 2048) or width % 16 or height % 16:
             raise ValueError("width and height must be 16-2048 pixels and multiples of 16")
         return ((width, height),)
+
+
+class VigenFlowEditPrompt:
+    """The edit instruction and its images in one node: connect a Load Image node (each reference
+    its own node, with its own upload and preview) to image_1, image_2, ... One wire to the edit node."""
+    SLOTS = 4
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {"prompt": ("STRING", {"multiline": True, "default": "Make it a snowy winter scene",
+                                               "tooltip": "What to change"})},
+            "optional": {f"image_{i}": ("IMAGE", {"tooltip": "The image to edit" if i == 1 else f"Reference {i}"})
+                         for i in range(1, cls.SLOTS + 1)},
+        }
+
+    RETURN_TYPES = ("VIGENFLOW_EDIT", "IMAGE")
+    RETURN_NAMES = ("edit_input", "image")
+    OUTPUT_TOOLTIPS = ("The prompt and images, to VigenFlow: Image Edit", "The first image, for example for Compare Images")
+    FUNCTION = "build"
+    CATEGORY = "NPU"
+
+    def build(self, prompt, **images):
+        loaded = []
+        for i in range(1, self.SLOTS + 1):
+            batch = images.get(f"image_{i}")
+            if batch is not None:
+                loaded += [batch[j:j + 1] for j in range(batch.shape[0])]
+        if not loaded:
+            raise ValueError("Connect at least one image (for example a Load Image node) to VigenFlow: Edit Prompt")
+        if not prompt.strip():
+            raise ValueError("The edit prompt is empty")
+        return ({"prompt": prompt, "images": loaded}, loaded[0])
 
 
 class VigenFlowReferenceImages:
@@ -754,6 +793,7 @@ NODE_CLASS_MAPPINGS = {
     "VigenFlowImageSize": VigenFlowImageSize,
     "VigenFlowEditSize": VigenFlowEditSize,
     "VigenFlowReferenceImages": VigenFlowReferenceImages,
+    "VigenFlowEditPrompt": VigenFlowEditPrompt,
     "VigenFlowCompare": VigenFlowCompare,
     "VigenFlowSaveImage": VigenFlowSaveImage,
 }
@@ -765,6 +805,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "VigenFlowImageSize": "VigenFlow: Image Size",
     "VigenFlowEditSize": "VigenFlow: Edit Output Size",
     "VigenFlowReferenceImages": "VigenFlow: Reference Images",
+    "VigenFlowEditPrompt": "VigenFlow: Edit Prompt",
     "VigenFlowCompare": "VigenFlow: Compare Images",
     "VigenFlowSaveImage": "VigenFlow: Save Image",
 }

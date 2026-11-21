@@ -97,7 +97,7 @@ function updateLoraWidgets(node) {
         if (widget) widget.hidden = fromStack;
     }
     const prompt = findWidget(node, "prompt");
-    if (prompt) prompt.hidden = inputLinked(node, "prompt_text");
+    if (prompt) prompt.hidden = inputLinked(node, "prompt_text") || inputLinked(node, "edit_input");
     const [width] = node.size;
     node.setSize([width, node.computeSize()[1]]);
     node.setDirtyCanvas(true, true);
@@ -499,7 +499,7 @@ app.registerExtension({
             onConnectionsChange?.apply(this, args);
             const name = args[4]?.name;
             if (["latent_size", "width", "height", "image_size"].includes(name)) updateSizeWidgets(this);
-            if (name === "lora_stack" || name === "prompt_text") updateLoraWidgets(this);
+            if (["lora_stack", "prompt_text", "edit_input"].includes(name)) updateLoraWidgets(this);
         };
 
         if (!generatorNodes.has(nodeData.name)) return;
