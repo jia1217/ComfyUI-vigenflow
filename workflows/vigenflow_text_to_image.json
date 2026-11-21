@@ -1,22 +1,219 @@
 {
-  "id": "14db1953-20de-4bed-9307-8655a52a1e4d",
+  "id": "15026ab8-93f4-415c-8482-1f760557ca8e",
   "revision": 0,
-  "last_node_id": 13,
-  "last_link_id": 2,
+  "last_node_id": 5,
+  "last_link_id": 4,
   "nodes": [
     {
       "id": 1,
-      "type": "VigenFlowTextToImage",
+      "type": "VigenFlowPrompt",
       "pos": [
-        480,
-        80
+        40,
+        40
       ],
       "size": [
-        400,
-        294
+        420,
+        240
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VigenFlowPrompt"
+      },
+      "widgets_values": [
+        "A mountain lake at sunrise"
+      ],
+      "widgets_values_named": {
+        "text": "A mountain lake at sunrise"
+      }
+    },
+    {
+      "id": 2,
+      "type": "VigenFlowImageSize",
+      "pos": [
+        40,
+        320
+      ],
+      "size": [
+        270,
+        82
       ],
       "flags": {},
       "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "aspect_ratio",
+          "name": "aspect_ratio",
+          "type": "COMBO",
+          "widget": {
+            "name": "aspect_ratio"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "size",
+          "name": "size",
+          "type": "COMBO",
+          "widget": {
+            "name": "size"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "image_size",
+          "name": "image_size",
+          "type": "VIGENFLOW_SIZE",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VigenFlowImageSize"
+      },
+      "widgets_values": [
+        "1:1",
+        "1024 × 1024",
+        1024,
+        1024
+      ],
+      "widgets_values_named": {
+        "aspect_ratio": "1:1",
+        "size": "1024 × 1024",
+        "width": 1024,
+        "height": 1024
+      }
+    },
+    {
+      "id": 3,
+      "type": "VigenFlowLoadLora",
+      "pos": [
+        40,
+        480
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "lora_stack",
+          "name": "lora_stack",
+          "shape": 7,
+          "type": "VIGENFLOW_LORA",
+          "link": null
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "COMBO",
+          "widget": {
+            "name": "model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "lora_name",
+          "name": "lora_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "lora_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "strength",
+          "name": "strength",
+          "type": "FLOAT",
+          "widget": {
+            "name": "strength"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "lora_stack",
+          "name": "lora_stack",
+          "type": "VIGENFLOW_LORA",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VigenFlowLoadLora"
+      },
+      "widgets_values": [
+        "FLUX.2 Klein 4B",
+        "none",
+        1
+      ],
+      "widgets_values_named": {
+        "model": "FLUX.2 Klein 4B",
+        "lora_name": "none",
+        "strength": 1
+      }
+    },
+    {
+      "id": 4,
+      "type": "VigenFlowTextToImage",
+      "pos": [
+        520,
+        40
+      ],
+      "size": [
+        400,
+        170
+      ],
+      "flags": {},
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -27,11 +224,18 @@
           "link": 1
         },
         {
+          "localized_name": "image_size",
+          "name": "image_size",
+          "shape": 7,
+          "type": "VIGENFLOW_SIZE",
+          "link": 2
+        },
+        {
           "localized_name": "lora_stack",
           "name": "lora_stack",
           "shape": 7,
           "type": "VIGENFLOW_LORA",
-          "link": null
+          "link": 3
         },
         {
           "localized_name": "model",
@@ -131,15 +335,6 @@
             "name": "lora_file"
           },
           "link": null
-        },
-        {
-          "localized_name": "keep_loaded",
-          "name": "keep_loaded",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "keep_loaded"
-          },
-          "link": null
         }
       ],
       "outputs": [
@@ -148,7 +343,7 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            2
+            4
           ]
         }
       ],
@@ -168,8 +363,7 @@
         "randomize",
         "none",
         1,
-        "",
-        true
+        ""
       ],
       "widgets_values_named": {
         "model": "FLUX.2 Klein 4B",
@@ -183,75 +377,29 @@
         "control_after_generate": "randomize",
         "lora": "none",
         "lora_scale": 1,
-        "lora_file": "",
-        "keep_loaded": true
+        "lora_file": ""
       }
     },
     {
-      "id": 12,
-      "type": "VigenFlowPrompt",
-      "pos": [
-        40,
-        80
-      ],
-      "size": [
-        400,
-        220
-      ],
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "inputs": [
-        {
-          "localized_name": "text",
-          "name": "text",
-          "type": "STRING",
-          "widget": {
-            "name": "text"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "localized_name": "prompt",
-          "name": "prompt",
-          "type": "STRING",
-          "links": [
-            1
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "VigenFlowPrompt"
-      },
-      "widgets_values": [
-        "A mountain lake at sunrise"
-      ],
-      "widgets_values_named": {
-        "text": "A mountain lake at sunrise"
-      }
-    },
-    {
-      "id": 13,
+      "id": 5,
       "type": "VigenFlowSaveImage",
       "pos": [
-        940,
-        80
+        1000,
+        40
       ],
       "size": [
-        480,
-        520
+        520,
+        600
       ],
       "flags": {},
-      "order": 2,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
           "localized_name": "images",
           "name": "images",
           "type": "IMAGE",
-          "link": 2
+          "link": 4
         },
         {
           "localized_name": "filename_prefix",
@@ -285,17 +433,33 @@
   "links": [
     [
       1,
-      12,
-      0,
       1,
+      0,
+      4,
       0,
       "STRING"
     ],
     [
       2,
-      1,
+      2,
       0,
-      13,
+      4,
+      1,
+      "VIGENFLOW_SIZE"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      2,
+      "VIGENFLOW_LORA"
+    ],
+    [
+      4,
+      4,
+      0,
+      5,
       0,
       "IMAGE"
     ]
@@ -304,7 +468,7 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.9,
+      "scale": 0.8264462809917354,
       "offset": [
         0,
         0
