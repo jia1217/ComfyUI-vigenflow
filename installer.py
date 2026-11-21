@@ -199,9 +199,40 @@ def _install_engine(settings, status):
     _say(status, f"VigenFlow engine {engine['version']} installed in {folder}")
 
 
+def read_user_loras(spec):
+    """(hide, entries) from ComfyUI/models/loras/<id>/loras.jsonc, the user's own LoRA list:
+    "hide" names engine LoRAs to leave out, "loras" adds entries (an entry with an engine
+    LoRA's name replaces it). "file" is relative to that folder. ((), []) without the file;
+    a broken file is reported in the console and ignored."""
+    filename = npu_worker.user_lora_file(spec["id"])
+    if not os.path.isfile(filename):
+        return set(), []
+    try:
+        data = npu_worker._read_jsonc(filename)
+        hide = data.get("hide", [])
+        entries = data.get("loras", [])
+        if not isinstance(hide, list) or not all(isinstance(h, str) for h in hide):
+            raise ValueError('"hide" must be a list of names')
+        if not isinstance(entries, list):
+            raise ValueError('"loras" must be a list')
+        folder = os.path.dirname(filename)
+        result = []
+        for e in entries:
+            if not isinstance(e, dict) or not e.get("name") or not isinstance(e.get("file"), str):
+                raise ValueError('each entry in "loras" needs a "name" and a "file"')
+            if e["name"] == "none":
+                raise ValueError('"none" cannot be a LoRA name')
+            result.append(dict(e, file=os.path.normpath(os.path.join(folder, os.path.expanduser(e["file"])))))
+        return set(hide), result
+    except (OSError, ValueError, AttributeError) as exc:
+        print(f"[VigenFlow] Ignoring {filename}: {exc}", file=sys.stderr, flush=True)
+        return set(), []
+
+
 def write_lora_configs(settings=None):
-    """loras.jsonc for each engine worker: the release list with its LoRA paths pointing to
-    <weights_dir>/<id>/loras/ (the release expects all_model_weights/ beside its package)."""
+    """loras.jsonc for each engine worker: the release list (its LoRA paths pointing to
+    <weights_dir>/<id>/loras/; the release expects all_model_weights/ beside its package),
+    minus the user's hidden names, plus the user's own entries. Paths are absolute."""
     settings = settings or npu_worker.load_settings()
     for spec in settings["models"].values():
         if not spec["engine"]:
@@ -209,8 +240,19 @@ def write_lora_configs(settings=None):
         release = os.path.join(spec["host_dir"], "loras.release.jsonc")
         if not os.path.isfile(release):
             continue
-        weights = os.path.relpath(settings["weights_dir"], spec["host_dir"]).replace(os.sep, "/")
-        text = open(release, encoding="utf-8").read().replace(LORA_PREFIX, weights + "/")
+        data = npu_worker._read_jsonc(release)
+        engine_entries = []
+        for e in data.get("loras", []):
+            file = e.get("file", "")
+            if file.startswith(LORA_PREFIX):
+                file = os.path.join(settings["weights_dir"], file[len(LORA_PREFIX):])
+            engine_entries.append(dict(e, file=os.path.normpath(os.path.join(spec["host_dir"], file))))
+        hide, own = read_user_loras(spec)
+        replaced = {e["name"] for e in own}
+        data["loras"] = [e for e in engine_entries if e.get("name") not in hide | replaced] + own
+        text = "// Written by ComfyUI-vigenflow from loras.release.jsonc and\n" \
+               f"// {npu_worker.user_lora_file(spec['id'])} (edit that file, not this one).\n" + \
+               json.dumps(data, indent=2) + "\n"
         config = os.path.join(spec["host_dir"], "loras.jsonc")
         if not os.path.isfile(config) or open(config, encoding="utf-8").read() != text:
             with open(config, "w", encoding="utf-8") as file:

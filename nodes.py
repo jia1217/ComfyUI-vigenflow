@@ -129,13 +129,25 @@ def _lora_files(spec):
 
 
 def model_loras():
-    """{model: ["none", loras.jsonc names..., files in ComfyUI/models/loras/<folder>/...]}."""
+    """{model: ["none", the model's LoRA list..., other files in ComfyUI/models/loras/<id>/...]}.
+    The list is the engine's LoRAs merged with the user's ComfyUI/models/loras/<id>/loras.jsonc
+    (rebuilt here, so a page reload shows changes); files that an entry uses or that "hide"
+    names are not listed again."""
     host = npu_worker.default_host_dir()
+    try:
+        if installer.engine_ready():
+            installer.write_lora_configs()
+    except Exception as exc:   # noqa: BLE001 - keep the node usable
+        print(f"[VigenFlow] {exc}", file=sys.stderr)
     result = {}
     for model in npu_worker.available_models(host):
         spec = npu_worker.model_spec(host, model)
-        names = [LORA_NONE] + npu_worker.lora_names(spec["host_dir"])
-        names += [name for name in _lora_files(spec) if name not in names]
+        entries = npu_worker.lora_entries(spec["host_dir"])
+        used = {os.path.normpath(e["file"]) for e in entries}
+        hide = installer.read_user_loras(spec)[0] if spec["engine"] else set()
+        names = [LORA_NONE] + [e["name"] for e in entries]
+        names += [name for name, path in _lora_files(spec).items()
+                  if name not in names and name not in hide and os.path.normpath(path) not in used]
         result[model] = names
     return result
 

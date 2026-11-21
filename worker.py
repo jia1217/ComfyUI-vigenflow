@@ -167,13 +167,56 @@ def resolve_steps(spec, steps):
     return steps
 
 
+def strip_jsonc(text):
+    """JSON with // and /* */ comments and trailing commas -> plain JSON."""
+    out, i, n, in_string = [], 0, len(text), False
+    while i < n:
+        c = text[i]
+        if in_string:
+            out.append(c)
+            if c == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 1
+            elif c == '"':
+                in_string = False
+        elif c == '"':
+            in_string = True
+            out.append(c)
+        elif text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+
+
 def _read_jsonc(filename):
     with open(filename, encoding="utf-8") as f:
-        return json.loads("".join(line for line in f if not line.lstrip().startswith("//")))
+        return json.loads(strip_jsonc(f.read()))
+
+
+def comfy_loras_dir():
+    """ComfyUI's LoRA folder (models/loras)."""
+    try:
+        import folder_paths
+        return folder_paths.get_folder_paths("loras")[0]
+    except (ImportError, IndexError, KeyError):
+        return os.path.join(comfy_models_dir(), "loras")
+
+
+def user_lora_file(model_id):
+    """The user's own LoRA list for a model: ComfyUI/models/loras/<id>/loras.jsonc."""
+    return os.path.join(comfy_loras_dir(), model_id, "loras.jsonc")
 
 
 def lora_entries(model_dir):
-    """Entries of a host's loras.jsonc (whole-line // comments allowed), with "file" made
+    """Entries of a host's loras.jsonc (comments allowed), with "file" made
     absolute the way the host resolves it: from the folder of the .jsonc file."""
     try:
         entries = _read_jsonc(os.path.join(model_dir, "loras.jsonc")).get("loras", [])

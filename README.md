@@ -71,6 +71,25 @@ the ones the engine ships with (downloaded on first use) and your own `.safetens
 | Qwen-Image 2.1 Turbo | `qwen_image_2_1_turbo` |
 | Z-Image Turbo | `z_image_turbo` |
 
+To delete one of your files, delete it from that folder and reload the page.
+
+**Your own LoRA list.** For names, default strengths, trigger words or downloads, or to remove
+one of the engine's LoRAs from the list, create `ComfyUI/models/loras/<id>/loras.jsonc`:
+
+```jsonc
+{
+  "hide": ["Wall Street Journal Style"],          // engine LoRAs to leave out of the list
+  "loras": [                                      // your own entries
+    { "name": "My Style", "file": "my_style.safetensors", "scale": 0.8,
+      "trigger": "my style", "source": "https://huggingface.co/<user>/<repo>" }
+  ]
+}
+```
+
+`file` is relative to that folder (or absolute); with a `source`, a missing file is downloaded
+on first use. An entry with an engine LoRA's name replaces it. Reload the page after editing.
+Do not edit `engine/.../loras.jsonc`: the node rebuilds it from the release list and this file.
+
 Each LoRA keeps its own strength. LoRAs of different models cannot be mixed in one stack.
 Include a LoRA's trigger words in the prompt (they are printed in the console).
 
