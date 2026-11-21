@@ -129,22 +129,28 @@ def load_settings(host_dir=NODE_DIR):
         else:
             raise WorkerError(f"models.{name} in {filename} needs an id (engine model) or a host_dir")
         weights = _path(host_dir, entry.get("weights_path"), f"models.{name}.weights_path", filename)
+        weights_id = entry.get("weights_id") or model_id   # an edit model uses its base model's weights
+        kind = entry.get("kind", "text_to_image")
+        if kind not in ("text_to_image", "edit"):
+            raise WorkerError(f"models.{name}.kind in {filename} must be text_to_image or edit")
         default, allowed, lo, hi = _steps(name, entry, filename)
         specs[name] = {
-            "name": name, "id": model_id, "engine": not entry.get("host_dir"),
+            "name": name, "id": model_id, "engine": not entry.get("host_dir"), "kind": kind,
+            "max_images": int(entry.get("max_images", 1)) if kind == "edit" else 0,
             "host_dir": host, "npu_files_path": npu,
-            "weights_path": weights or (os.path.join(weights_dir, model_id) if model_id else None),
+            "weights_path": weights or (os.path.join(weights_dir, weights_id) if weights_id else None),
             "weights_given": weights is not None,
-            "weights_folder": model_id, "license": entry.get("license"),
+            "weights_folder": weights_id, "license": entry.get("license"),
             "steps": default, "allowed_steps": allowed, "min_steps": lo, "max_steps": hi,
         }
     return {"output_dir": _path(host_dir, user.get("output_dir"), "output_dir", user_file),
             "engine": engine, "weights_dir": weights_dir, "accept_licenses": accepted, "models": specs}
 
 
-def available_models(host_dir=NODE_DIR):
-    """All configured model names, in order (the engine and weights download on first use)."""
-    return list(load_settings(host_dir)["models"])
+def available_models(host_dir=NODE_DIR, kind=None):
+    """Configured model names in order, optionally only text_to_image or edit models
+    (the engine and weights download on first use)."""
+    return [name for name, spec in load_settings(host_dir)["models"].items() if kind in (None, spec["kind"])]
 
 
 def model_spec(host_dir, model):
@@ -262,7 +268,7 @@ class NPUWorker:
     """One resident run.exe. Model, height, width and LoRA are fixed for its lifetime."""
 
     def __init__(self, spec, height, width, lora="none", lora_scale=None, comfy_models_dir=None,
-                 lora_stack=None):
+                 lora_stack=None, input_images=None):
         self.spec = spec
         self.name = spec["name"]
         self.key = (spec["name"], spec["host_dir"], height, width, lora, lora_scale, comfy_models_dir,
@@ -284,6 +290,8 @@ class NPUWorker:
                 cmd += ["--lora", lora]
             if lora != "none" and lora_scale is not None:
                 cmd += ["--lora_scale", str(lora_scale)]
+        for image in input_images or ():   # edit models: references (each request sends them too)
+            cmd += ["--input_image", image]
         if spec["weights_path"]:
             cmd += ["--weights_path", spec["weights_path"]]
         if spec["npu_files_path"]:
@@ -392,12 +400,14 @@ class NPUWorker:
         line, self._buf = self._buf.split(b"\n", 1)
         return line
 
-    def generate(self, prompt, seed, output, steps=None, should_cancel=None):
+    def generate(self, prompt, seed, output, steps=None, should_cancel=None, input_images=None):
         """Runs one image, writes the PNG to `output`, returns the worker's reply (timings).
         `should_cancel` is called about every 0.2 s while waiting; True kills the worker."""
         self._next_id += 1
         request = {"id": self._next_id, "prompt": prompt, "seed": int(seed),
                    "steps": int(steps or self.spec["steps"]), "output": os.path.abspath(output)}
+        if input_images:
+            request["input_image"] = [os.path.abspath(p) for p in input_images]
         self._tail = b""
         try:
             self.proc.stdin.write((json.dumps(request) + "\n").encode("utf-8"))
@@ -444,7 +454,8 @@ _lock = threading.Lock()
 _worker = None
 
 
-def get_worker(spec, height, width, lora="none", lora_scale=None, comfy_models_dir=None, lora_stack=None):
+def get_worker(spec, height, width, lora="none", lora_scale=None, comfy_models_dir=None, lora_stack=None,
+               input_images=None):
     """Reuse the resident worker while its launch inputs match. Only one model is resident:
     the NPU runs one job at a time, so switching models stops the previous worker first.
     lora_stack: tuple of (absolute file, strength, extra loras.jsonc fields) from Load LoRA nodes;
@@ -456,7 +467,7 @@ def get_worker(spec, height, width, lora="none", lora_scale=None, comfy_models_d
             _worker.close()
             _worker = None
         if _worker is None:
-            _worker = NPUWorker(spec, height, width, lora, lora_scale, comfy_models_dir, lora_stack)
+            _worker = NPUWorker(spec, height, width, lora, lora_scale, comfy_models_dir, lora_stack, input_images)
         return _worker
 
 

@@ -105,8 +105,14 @@ def _engine_parts(settings):
 
 
 def engine_ready(settings=None):
+    """The engine folder is whole and has every engine model of models.json (a newer node can
+    add models: then the engine is unpacked again)."""
     settings = settings or npu_worker.load_settings()
-    return os.path.isfile(os.path.join(settings["engine"]["dir"], COMPLETE))
+    if not os.path.isfile(os.path.join(settings["engine"]["dir"], COMPLETE)):
+        return False
+    return all(os.path.isfile(os.path.join(spec["host_dir"], "run.exe")) and
+               (not spec["npu_files_path"] or os.path.isdir(spec["npu_files_path"]))
+               for spec in settings["models"].values() if spec["engine"])
 
 
 def _download(url, target, status):
@@ -204,7 +210,7 @@ def read_user_loras(spec):
     "hide" names engine LoRAs to leave out, "loras" adds entries (an entry with an engine
     LoRA's name replaces it). "file" is relative to that folder. ((), []) without the file;
     a broken file is reported in the console and ignored."""
-    filename = npu_worker.user_lora_file(spec["id"])
+    filename = npu_worker.user_lora_file(spec["weights_folder"])
     if not os.path.isfile(filename):
         return set(), []
     try:
@@ -251,7 +257,7 @@ def write_lora_configs(settings=None):
         replaced = {e["name"] for e in own}
         data["loras"] = [e for e in engine_entries if e.get("name") not in hide | replaced] + own
         text = "// Written by ComfyUI-vigenflow from loras.release.jsonc and\n" \
-               f"// {npu_worker.user_lora_file(spec['id'])} (edit that file, not this one).\n" + \
+               f"// {npu_worker.user_lora_file(spec['weights_folder'])} (edit that file, not this one).\n" + \
                json.dumps(data, indent=2) + "\n"
         config = os.path.join(spec["host_dir"], "loras.jsonc")
         if not os.path.isfile(config) or open(config, encoding="utf-8").read() != text:
@@ -278,17 +284,17 @@ def ensure_weights(spec, status=None, should_cancel=None):
         raise InstallError(f"{spec['name']}: no weights in {spec['weights_path']}")
     settings = npu_worker.load_settings()
     license_ = spec.get("license")
-    if license_ and spec["id"] not in settings["accept_licenses"]:
+    if license_ and spec["weights_folder"] not in settings["accept_licenses"]:
         raise InstallError(
             f"{spec['name']} weights are under the {license_['name']} ({license_['url']}). "
-            f"To accept it and download them, add \"{spec['id']}\" to \"accept_licenses\" in "
+            f"To accept it and download them, add \"{spec['weights_folder']}\" to \"accept_licenses\" in "
             f"{os.path.join(npu_worker.NODE_DIR, npu_worker.SETTINGS_FILE)}, for example "
-            f"{{\"accept_licenses\": [\"{spec['id']}\"]}}, then restart ComfyUI.")
+            f"{{\"accept_licenses\": [\"{spec['weights_folder']}\"]}}, then restart ComfyUI.")
     prepare = os.path.join(settings["engine"]["dir"], "prepare")
     weights_dir = os.path.dirname(spec["weights_path"])
     os.makedirs(weights_dir, exist_ok=True)
     cmd = [os.path.join(prepare, "prepare_base.exe"), "--config", os.path.join(prepare, "prepare_models.jsonc"),
-           "--weights_root", weights_dir, "--only", spec["id"]]
+           "--weights_root", weights_dir, "--only", spec["weights_folder"]]
     if license_:
         cmd.append("--accept_license")   # accepted in vigenflow_settings.json
     _say(status, f"Downloading the {spec['name']} weights into {spec['weights_path']} "

@@ -1,8 +1,9 @@
 # ComfyUI-vigenflow
 
-Text-to-image on the **AMD Ryzen AI NPU** in ComfyUI, with the [VigenFlow](https://github.com/jia1217/vigenflow)
-engine: FLUX.2 Klein 4B, FLUX.1 Schnell, Krea 2 Turbo, Qwen-Image 2.1 Turbo and Z-Image Turbo.
-Text encoder, denoising and VAE decoder all run on the NPU (about 8 s per 1024×1024 FLUX.2 image).
+Text-to-image and image editing on the **AMD Ryzen AI NPU** in ComfyUI, with the
+[VigenFlow](https://github.com/jia1217/vigenflow) engine: FLUX.2 Klein 4B, FLUX.1 Schnell, Krea 2 Turbo,
+Qwen-Image 2.1 Turbo and Z-Image Turbo, and FLUX.2 Klein 4B Edit (1–4 reference images).
+Everything runs on the NPU: about 8 s per 1024×1024 FLUX.2 image, 17 s per FLUX.2 edit.
 
 ## Quick Start
 
@@ -18,6 +19,7 @@ Text encoder, denoising and VAE decoder all run on the NPU (about 8 s per 1024×
    right away; to do that by hand, run `python install.py` in this folder.
 
 3. Open **Templates → Extensions → ComfyUI-vigenflow** and choose **vigenflow_text_to_image**
+   or **vigenflow_image_edit** (it edits ComfyUI's `input/example.png`)
    (or drag [`example_workflows/vigenflow_text_to_image.json`](example_workflows/vigenflow_text_to_image.json)
    onto the canvas), pick a model and click **Run**. The first image of each model downloads its
    weights into `ComfyUI/models/vigenflow/<model>/` (8–27 GB; progress in the ComfyUI console).
@@ -49,6 +51,7 @@ research and evaluation only) download only after you accept their terms. Read t
 | Node | Use |
 |---|---|
 | **VigenFlow: Text to Image (NPU)** | Model, prompt, size, steps, seed and LoRA; returns the image and shows the runtimes |
+| **VigenFlow: Image Edit (NPU)** | `image` plus optional `image_2`–`image_4` references and what to change; the same controls |
 | **VigenFlow: Prompt** | A prompt box; connect to `prompt_text` (one prompt can feed several models) |
 | **VigenFlow: Image Size** | Aspect ratio and size; connect `image_size` |
 | **VigenFlow: Load LoRA** | One LoRA of one model with its strength; chain several into `lora_stack` |
@@ -56,7 +59,13 @@ research and evaluation only) download only after you accept their terms. Read t
 
 **Size:** `aspect_ratio` (1:1, 4:3, 3:4, 3:2, 2:3, 16:9, 9:16) with sizes of that ratio, or
 `Custom` width and height (16–2048, multiples of 16).
-**Steps:** 0 uses the model's default (FLUX.2 4, FLUX.1 4, Krea 2 8, Qwen-Image 8, Z-Image 8).
+**Steps:** 0 uses the model's default (FLUX.2 4, FLUX.1 4, Krea 2 8, Qwen-Image 8, Z-Image 8,
+FLUX.2 Edit 4).
+
+**Editing:** `aspect_ratio` = `Input image` (the default) keeps the first image's shape at about
+1 megapixel; any other size works too. Each reference is center-cropped to the output's shape and
+resized to it. FLUX.2 Klein 4B Edit uses the FLUX.2 Klein 4B weights (no extra download) and
+its LoRAs (folder `flux2_klein_4B`).
 
 ## LoRAs
 

@@ -1,0 +1,489 @@
+{
+  "id": "3ef876f0-01e9-4317-a472-758d712d5e7b",
+  "revision": 0,
+  "last_node_id": 5,
+  "last_link_id": 4,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        282.798828125,
+        102
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "image",
+          "name": "image",
+          "type": "COMBO",
+          "widget": {
+            "name": "image"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "choose file to upload",
+          "name": "upload",
+          "type": "IMAGEUPLOAD",
+          "widget": {
+            "name": "upload"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1
+          ]
+        },
+        {
+          "localized_name": "MASK",
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "example.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "example.png",
+        "upload": "image"
+      }
+    },
+    {
+      "id": 2,
+      "type": "VigenFlowPrompt",
+      "pos": [
+        40,
+        420
+      ],
+      "size": [
+        400,
+        180
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VigenFlowPrompt"
+      },
+      "widgets_values": [
+        "Turn this drawing into a photorealistic photo"
+      ],
+      "widgets_values_named": {
+        "text": "Turn this drawing into a photorealistic photo"
+      }
+    },
+    {
+      "id": 3,
+      "type": "VigenFlowLoadLora",
+      "pos": [
+        40,
+        640
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "lora_stack",
+          "name": "lora_stack",
+          "shape": 7,
+          "type": "VIGENFLOW_LORA",
+          "link": null
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "COMBO",
+          "widget": {
+            "name": "model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "lora_name",
+          "name": "lora_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "lora_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "strength",
+          "name": "strength",
+          "type": "FLOAT",
+          "widget": {
+            "name": "strength"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "lora_stack",
+          "name": "lora_stack",
+          "type": "VIGENFLOW_LORA",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VigenFlowLoadLora"
+      },
+      "widgets_values": [
+        "FLUX.2 Klein 4B Edit",
+        "none",
+        1
+      ],
+      "widgets_values_named": {
+        "model": "FLUX.2 Klein 4B Edit",
+        "lora_name": "none",
+        "strength": 1
+      }
+    },
+    {
+      "id": 4,
+      "type": "VigenFlowImageEdit",
+      "pos": [
+        480,
+        40
+      ],
+      "size": [
+        400,
+        274
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "localized_name": "image_2",
+          "name": "image_2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "localized_name": "image_3",
+          "name": "image_3",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "localized_name": "image_4",
+          "name": "image_4",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "localized_name": "prompt_text",
+          "name": "prompt_text",
+          "shape": 7,
+          "type": "STRING",
+          "link": 2
+        },
+        {
+          "localized_name": "image_size",
+          "name": "image_size",
+          "shape": 7,
+          "type": "VIGENFLOW_SIZE",
+          "link": null
+        },
+        {
+          "localized_name": "lora_stack",
+          "name": "lora_stack",
+          "shape": 7,
+          "type": "VIGENFLOW_LORA",
+          "link": 3
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "COMBO",
+          "widget": {
+            "name": "model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "aspect_ratio",
+          "name": "aspect_ratio",
+          "type": "COMBO",
+          "widget": {
+            "name": "aspect_ratio"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "size",
+          "name": "size",
+          "type": "COMBO",
+          "widget": {
+            "name": "size"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "steps",
+          "name": "steps",
+          "type": "INT",
+          "widget": {
+            "name": "steps"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "lora",
+          "name": "lora",
+          "type": "COMBO",
+          "widget": {
+            "name": "lora"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "lora_scale",
+          "name": "lora_scale",
+          "type": "FLOAT",
+          "widget": {
+            "name": "lora_scale"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "lora_file",
+          "name": "lora_file",
+          "type": "STRING",
+          "widget": {
+            "name": "lora_file"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VigenFlowImageEdit"
+      },
+      "widgets_values": [
+        "FLUX.2 Klein 4B Edit",
+        "Make it a snowy winter scene",
+        "Input image",
+        "1024 × 1024",
+        1024,
+        1024,
+        0,
+        42,
+        "randomize",
+        "none",
+        1,
+        ""
+      ],
+      "widgets_values_named": {
+        "model": "FLUX.2 Klein 4B Edit",
+        "prompt": "Make it a snowy winter scene",
+        "aspect_ratio": "Input image",
+        "size": "1024 × 1024",
+        "width": 1024,
+        "height": 1024,
+        "steps": 0,
+        "seed": 42,
+        "control_after_generate": "randomize",
+        "lora": "none",
+        "lora_scale": 1,
+        "lora_file": ""
+      }
+    },
+    {
+      "id": 5,
+      "type": "VigenFlowSaveImage",
+      "pos": [
+        960,
+        40
+      ],
+      "size": [
+        520,
+        600
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 4
+        },
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VigenFlowSaveImage"
+      },
+      "widgets_values": [
+        "vigenflow_edit"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "vigenflow_edit"
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ],
+    [
+      2,
+      2,
+      0,
+      4,
+      4,
+      "STRING"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      6,
+      "VIGENFLOW_LORA"
+    ],
+    [
+      4,
+      4,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8264462809917354,
+      "offset": [
+        0,
+        0
+      ]
+    }
+  },
+  "version": 0.4
+}

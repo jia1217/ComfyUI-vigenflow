@@ -68,17 +68,51 @@ def _custom_size_inputs():
     return {name: ("INT", options.copy()) for name in ("width", "height")}
 
 
-def _size_preset_inputs():
+INPUT_IMAGE = "Input image"   # edit node: the first reference's shape at about 1 megapixel
+
+
+def _size_preset_inputs(input_image=False):
     """aspect_ratio, size (filtered to the ratio in the browser), then width and height,
-    which are used when aspect_ratio is Custom."""
+    which are used when aspect_ratio is Custom. input_image adds the "Input image" choice."""
+    first = [INPUT_IMAGE] if input_image else []
     return {
-        "aspect_ratio": (RATIO_ORDER + [SIZE_CUSTOM], {
-            "default": "1:1",
-            "tooltip": "Width:height. Custom: type width and height (16-2048, multiples of 16)."}),
+        "aspect_ratio": (first + RATIO_ORDER + [SIZE_CUSTOM], {
+            "default": first[0] if first else "1:1",
+            "tooltip": ("Input image: the first image's shape at about 1 megapixel. " if first else "") +
+                       "Width:height. Custom: type width and height (16-2048, multiples of 16)."}),
         "size": (ALL_SIZES, {"default": _size_label(1024, 1024),
                              "tooltip": "Image size (width × height) for the chosen aspect ratio"}),
         **_custom_size_inputs(),
     }
+
+
+def _size_like(width, height):
+    """A size with this shape, about 1 megapixel, sides multiples of 16 up to 2048."""
+    scale = (1024 * 1024 / (width * height)) ** 0.5
+    w, h = width * scale, height * scale
+    shrink = min(1.0, 2048 / max(w, h))
+    return tuple(max(16, min(2048, int(round(v * shrink / 16)) * 16)) for v in (w, h))
+
+
+def _prepare_references(images, width, height, folder):
+    """ComfyUI IMAGE tensors -> PNG files of width x height for the edit worker: each one is
+    center-cropped to that shape and resized (as the VigenFlow server prepares references)."""
+    paths = []
+    for tensor in images:
+        array = (tensor[0].clamp(0, 1).cpu().numpy() * 255.0 + 0.5).astype(np.uint8)
+        im = Image.fromarray(array[..., :3]).convert("RGB")
+        src_w, src_h = im.size
+        target = width / height
+        if src_w / src_h > target:           # wider: crop the sides
+            crop_w = round(src_h * target)
+            box = ((src_w - crop_w) // 2, 0, (src_w - crop_w) // 2 + crop_w, src_h)
+        else:                                 # taller: crop top and bottom
+            crop_h = round(src_w / target)
+            box = (0, (src_h - crop_h) // 2, src_w, (src_h - crop_h) // 2 + crop_h)
+        path = os.path.join(folder, f"vigenflow_ref_{uuid.uuid4().hex}.png")
+        im.crop(box).resize((width, height), Image.LANCZOS).save(path)
+        paths.append(path)
+    return paths
 
 
 def _chosen_size(aspect_ratio, size, width, height):
@@ -179,7 +213,7 @@ def _resolve_lora_stack(spec, model, stack):
 
 
 def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale, keep_loaded,
-                      lora_file="", unique_id=None, latent_size=None, lora_stack=None):
+                      lora_file="", unique_id=None, latent_size=None, lora_stack=None, input_images=None):
     keep_loaded = False   # always release the model after the image (the widget is hidden)
     if not prompt.strip():
         raise ValueError("prompt is empty")
@@ -191,6 +225,11 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
         raise ValueError("width and height must be multiples of 16")
     host = npu_worker.default_host_dir()
     spec = npu_worker.model_spec(host, model)
+    images = list(input_images or [])
+    if spec["kind"] == "edit" and not 1 <= len(images) <= spec["max_images"]:
+        raise ValueError(f"{model} takes 1 to {spec['max_images']} images")
+    if spec["kind"] != "edit" and images:
+        raise ValueError(f"{model} is a text-to-image model; use it on VigenFlow: Text to Image (NPU)")
     steps = npu_worker.resolve_steps(spec, steps)
     stack, trigger_notes = _resolve_lora_stack(spec, model, lora_stack) if lora_stack else ((), [])
     lora_file = lora_file.strip()
@@ -207,7 +246,9 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
     tmp_dir = folder_paths.get_temp_directory() if folder_paths else tempfile.gettempdir()
     os.makedirs(tmp_dir, exist_ok=True)
     png = os.path.join(tmp_dir, f"vigenflow_npu_{uuid.uuid4().hex}.png")
+    refs = []
     try:
+        refs = _prepare_references(images, width, height, tmp_dir)
         if lora == "config default":   # no --lora: the host merges the enabled entries with their own scales
             lora, scale = None, None
         else:
@@ -225,7 +266,7 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
             if model_management is not None:
                 model_management.throw_exception_if_processing_interrupted()
             raise
-        w = npu_worker.get_worker(spec, height, width, lora, scale, comfy_models_dir, stack or None)
+        w = npu_worker.get_worker(spec, height, width, lora, scale, comfy_models_dir, stack or None, refs)
 
         # Live status on the node itself: stage, elapsed time and worker RAM as text, plus
         # the node's progress bar (text encoder 1 + denoising steps + VAE 1 units).
@@ -261,7 +302,7 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
 
         try:
             print(f"H = {height}\nW = {width}\nPrompt = {prompt}", file=sys.stderr, flush=True)   # as a normal run
-            reply = w.generate(prompt, seed, png, steps, should_cancel=tick)
+            reply = w.generate(prompt, seed, png, steps, should_cancel=tick, input_images=refs)
             ram_now, ram_peak = w.memory_gb()   # before keep_loaded=False releases the worker
         except npu_worker.Cancelled:
             npu_worker.release_worker()
@@ -271,8 +312,9 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
         with Image.open(png) as im:
             pixels = np.asarray(im.convert("RGB"), dtype=np.float32) / 255.0
     finally:
-        if os.path.exists(png):
-            os.remove(png)
+        for path in [png] + refs:
+            if os.path.exists(path):
+                os.remove(path)
         if not keep_loaded:
             npu_worker.release_worker()
 
@@ -289,7 +331,10 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
     print(f"[VigenFlow {model}] {width}x{height} seed {seed} steps {steps};{loras} {timings}; {memory}", flush=True)
     for note in trigger_notes:
         print(f"[VigenFlow {model}] LoRA trigger words, {note}", flush=True)
+    reference_s = reply.get("conditioning_seconds", 0.0)
     runtime_summary = (
+        (f"Reference encoder runtime {reference_s:.2f} s ({len(refs)} image{'s' * (len(refs) > 1)})\n"
+         if refs else "") +
         f"Text encoder runtime {text_s:.2f} s\n"
         f"Denoising runtime {denoise_s:.2f} s\n"
         f"VAE decoder runtime {vae_s:.2f} s\n"
@@ -332,7 +377,7 @@ class VigenFlowTextToImage:
     @classmethod
     def INPUT_TYPES(cls):
         host = npu_worker.default_host_dir()
-        models = npu_worker.available_models(host)
+        models = npu_worker.available_models(host, "text_to_image")
         step_help = "; ".join(
             f"{m} {npu_worker.model_spec(host, m)['steps']}" for m in models
             if m in npu_worker.load_settings(host)["models"])
@@ -380,6 +425,65 @@ class VigenFlowTextToImage:
             prompt = prompt_text
         return run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale,
                                  keep_loaded, lora_file, unique_id, None, lora_stack)
+
+
+class VigenFlowImageEdit:
+    """Prompt + reference images -> image with a VigenFlow edit model (FLUX.2 Klein 4B Edit: 1-4
+    references). Text encoder, reference encoder, denoising and VAE decode run in its run.exe."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        host = npu_worker.default_host_dir()
+        models = npu_worker.available_models(host, "edit")
+        specs = [npu_worker.model_spec(host, m) for m in models]
+        most = max([s["max_images"] for s in specs] or [1])
+        step_help = "; ".join(f"{s['name']} {s['steps']}" for s in specs)
+        image_help = "; ".join(f"{s['name']} 1-{s['max_images']}" for s in specs)
+        return {
+            "required": {
+                "model": (models, {"default": models[0] if models else None,
+                                   "tooltip": "VigenFlow edit models (models.json); the engine and weights "
+                                              "download on first use"}),
+                "image": ("IMAGE", {"tooltip": f"The image to edit (references: {image_help})"}),
+                "prompt": ("STRING", {"multiline": True, "default": "Make it a snowy winter scene",
+                                      "tooltip": "What to change; a connected prompt_text replaces it"}),
+                **_size_preset_inputs(input_image=True),
+                "steps": ("INT", {"default": 0, "min": 0, "max": 50,
+                                  "tooltip": f"0 = the model's default ({step_help})"}),
+                "seed": ("INT", {"default": 42, "min": 0, "max": 2**31 - 1}),
+                **{k: v for k, v in _lora_inputs(npu_worker.all_lora_names(host)).items() if k != "keep_loaded"},
+                "lora_file": ("STRING", {"default": "",
+                                         "tooltip": "Path to a .safetensors LoRA; replaces the 'lora' choice when set."}),
+            },
+            "hidden": {"unique_id": "UNIQUE_ID"},
+            "optional": {
+                **{f"image_{i}": ("IMAGE", {"tooltip": f"Reference image {i}"}) for i in range(2, most + 1)},
+                "prompt_text": _optional_inputs()["prompt_text"],
+                "image_size": ("VIGENFLOW_SIZE", {"tooltip": "Connect VigenFlow: Image Size; replaces aspect_ratio, "
+                                                             "size, width and height."}),
+                "lora_stack": _optional_inputs()["lora_stack"],
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "edit"
+    CATEGORY = "NPU"
+
+    def edit(self, model, image, prompt, aspect_ratio, size, width, height, steps, seed, lora, lora_scale,
+             lora_file, unique_id=None, lora_stack=None, prompt_text=None, image_size=None, **references):
+        images = [image] + [references[k] for k in sorted(references, key=lambda k: int(k.split("_")[1]))
+                            if k.startswith("image_") and references[k] is not None]
+        if image_size is not None:
+            width, height = image_size
+        elif aspect_ratio == INPUT_IMAGE:
+            width, height = _size_like(int(image.shape[2]), int(image.shape[1]))
+        else:
+            width, height = _chosen_size(aspect_ratio, size, width, height)
+        if prompt_text is not None:
+            prompt = prompt_text
+        return run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale, False,
+                                 lora_file, unique_id, None, lora_stack, images)
 
 
 class VigenFlowPrompt:
@@ -521,6 +625,7 @@ except Exception as exc:   # noqa: BLE001 - never stop ComfyUI from starting
 
 NODE_CLASS_MAPPINGS = {
     "VigenFlowTextToImage": VigenFlowTextToImage,
+    "VigenFlowImageEdit": VigenFlowImageEdit,
     "VigenFlowPrompt": VigenFlowPrompt,
     "VigenFlowLoadLora": VigenFlowLoadLora,
     "VigenFlowImageSize": VigenFlowImageSize,
@@ -528,6 +633,7 @@ NODE_CLASS_MAPPINGS = {
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "VigenFlowTextToImage": "VigenFlow: Text to Image (NPU)",
+    "VigenFlowImageEdit": "VigenFlow: Image Edit (NPU)",
     "VigenFlowPrompt": "VigenFlow: Prompt",
     "VigenFlowLoadLora": "VigenFlow: Load LoRA",
     "VigenFlowImageSize": "VigenFlow: Image Size",

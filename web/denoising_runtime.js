@@ -2,10 +2,11 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 const widgetName = "vigenflow_denoising_runtime";
-const widgetHeight = 108;
-const generatorNodes = new Set(["VigenFlowTextToImage", "Flux2KleinNPU"]);
+const lineHeight = 20;   // runtime lines; the box grows with their number (4 or 5)
+const generatorNodes = new Set(["VigenFlowTextToImage", "VigenFlowImageEdit", "Flux2KleinNPU"]);
 const sizeNodes = new Set([...generatorNodes, "VigenFlowImageSize"]);
 const CUSTOM = "Custom";
+const INPUT_IMAGE = "Input image";   // edit node: size from the first reference image
 
 const findWidget = (node, name) => node.widgets?.find((widget) => widget.name === name);
 
@@ -56,14 +57,15 @@ function updateSizeWidgets(node) {
     const fromSizeNode = inputLinked(node, "image_size");   // VigenFlow: Image Size, one wire
     if (ratio && fromInputs && ratio.value !== CUSTOM) ratio.value = CUSTOM;
     const custom = !ratio || ratio.value === CUSTOM;
+    const fromImage = ratio?.value === INPUT_IMAGE;
     if (ratio) ratio.hidden = fromLatent || fromInputs || fromSizeNode;
     if (size) {
-        if (!custom) {
+        if (!custom && !fromImage) {
             const labels = sizesFor(size, ratio.value);
             size.options.values = labels;
             if (!labels.includes(size.value)) size.value = closestToOneMegapixel(labels);
         }
-        size.hidden = fromLatent || fromSizeNode || custom;
+        size.hidden = fromLatent || fromSizeNode || custom || fromImage;
     }
     for (const name of ["width", "height"]) {
         const widget = findWidget(node, name);
@@ -314,6 +316,9 @@ app.registerExtension({
             const summary = output?.text?.[0];
             if (typeof summary !== "string") return;
 
+            const lines = summary.split("\n").length;
+            const grew = lines !== this.vigenflowLines;
+            this.vigenflowLines = lines;
             let widget = findWidget(this, widgetName);
             if (!widget) {
                 const element = document.createElement("div");
@@ -327,14 +332,15 @@ app.registerExtension({
                 widget = this.addDOMWidget(widgetName, "div", element, {
                     serialize: false,
                     hideOnZoom: false,
-                    getMinHeight: () => widgetHeight,
-                    getMaxHeight: () => widgetHeight,
+                    getMinHeight: () => this.vigenflowLines * lineHeight + 8,
+                    getMaxHeight: () => this.vigenflowLines * lineHeight + 8,
                 });
                 widget.serialize = false;
                 this.setSize([this.size[0], Math.max(this.size[1], this.computeSize()[1])]);
             }
 
             widget.element.textContent = summary;
+            if (grew) this.setSize([this.size[0], Math.max(this.size[1], this.computeSize()[1])]);
             this.setDirtyCanvas(true, true);
         };
     },
