@@ -64,6 +64,23 @@
         4
       ],
       "reference_token_limit": 65536
+    },
+    "Qwen-Image 2.1 Turbo Edit": {
+      "id": "qwen_image_2_1_turbo_edit",
+      "kind": "edit",
+      "weights_id": "qwen_image_2_1_turbo",
+      "npu_files": "all_npu_files/qwen_image/edit",
+      "max_images": 10,
+      "reference_token_limit": 16384,
+      "steps": 8,
+      "allowed_steps": [
+        8
+      ],
+      "license": {
+        "name": "Qwen Research License Agreement (research and evaluation only)",
+        "url": "https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo"
+      },
+      "worker": false
     }
   }
 }

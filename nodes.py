@@ -356,7 +356,8 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
             return _interrupted()
 
         try:
-            print(f"H = {height}\nW = {width}\nPrompt = {prompt}", file=sys.stderr, flush=True)   # as a normal run
+            if not w.one_shot:   # a worker prints them once at start-up; a normal run prints them itself
+                print(f"H = {height}\nW = {width}\nPrompt = {prompt}", file=sys.stderr, flush=True)
             reply = w.generate(prompt, seed, png, steps, should_cancel=tick, input_images=refs)
             ram_now, ram_peak = w.memory_gb()   # before keep_loaded=False releases the worker
         except npu_worker.Cancelled:
@@ -485,7 +486,8 @@ class VigenFlowTextToImage:
 
 class VigenFlowImageEdit:
     """Prompt + reference images -> image with a VigenFlow edit model (FLUX.2 Klein 4B Edit: 1-4
-    references). Text encoder, reference encoder, denoising and VAE decode run in its run.exe."""
+    references; Qwen-Image 2.1 Turbo Edit: 1-10). Text encoder, reference encoder, denoising and VAE
+    decode run in its run.exe."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -660,8 +662,12 @@ class VigenFlowEditPrompt:
         return {
             "required": {"prompt": ("STRING", {"multiline": True, "default": "Make it a snowy winter scene",
                                                "tooltip": "What to change"})},
-            "optional": {f"image_{i}": ("IMAGE", {"tooltip": "The image to edit" if i == 1 else f"Reference {i}"})
-                         for i in range(1, cls.SLOTS + 1)},
+            "optional": {
+                **{f"image_{i}": ("IMAGE", {"tooltip": "The image to edit" if i == 1 else f"Reference {i}"})
+                   for i in range(1, cls.SLOTS + 1)},
+                "references": ("VIGENFLOW_IMAGES", {"tooltip": "More references after image_1-image_4, for example "
+                                                               "from VigenFlow: Reference Images (Qwen-Image Edit takes up to 10)"}),
+            },
         }
 
     RETURN_TYPES = ("VIGENFLOW_EDIT",) + ("IMAGE",) * SLOTS   # image_1 is where the single image output was
@@ -671,12 +677,13 @@ class VigenFlowEditPrompt:
     FUNCTION = "build"
     CATEGORY = "NPU"
 
-    def build(self, prompt, **images):
+    def build(self, prompt, references=None, **images):
         loaded = []
         for i in range(1, self.SLOTS + 1):
             batch = images.get(f"image_{i}")
             if batch is not None:
                 loaded += [batch[j:j + 1] for j in range(batch.shape[0])]
+        loaded += list(references or [])
         if not loaded:
             raise ValueError("Connect at least one image (for example a Load Image node) to VigenFlow: Edit Prompt")
         if not prompt.strip():

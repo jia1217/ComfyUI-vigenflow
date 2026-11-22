@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from functools import lru_cache
 
 
@@ -138,6 +139,7 @@ def load_settings(host_dir=NODE_DIR):
             "name": name, "id": model_id, "engine": not entry.get("host_dir"), "kind": kind,
             "max_images": int(entry.get("max_images", 1)) if kind == "edit" else 0,
             "reference_token_limit": int(entry.get("reference_token_limit", 0)),   # 0: no budget
+            "worker": entry.get("worker", True),   # false: run.exe has no worker mode (one run per image)
             "host_dir": host, "npu_files_path": npu,
             "weights_path": weights or (os.path.join(weights_dir, weights_id) if weights_id else None),
             "weights_given": weights is not None,
@@ -266,7 +268,9 @@ def all_lora_names(host_dir):
 
 
 class NPUWorker:
-    """One resident run.exe. Model, height, width and LoRA are fixed for its lifetime."""
+    """One resident run.exe. Model, height, width and LoRA are fixed for its lifetime. A model
+    whose run.exe has no worker mode ("worker": false in models.json) runs one run.exe per image
+    instead (one_shot), with the same interface."""
 
     def __init__(self, spec, height, width, lora="none", lora_scale=None, comfy_models_dir=None,
                  lora_stack=None, input_images=None):
@@ -275,12 +279,13 @@ class NPUWorker:
         self.key = (spec["name"], spec["host_dir"], height, width, lora, lora_scale, comfy_models_dir,
                     lora_stack)
         self._lora_config = None
+        self.one_shot = spec.get("worker") is False
         host_dir = spec["host_dir"]
         exe = os.path.join(host_dir, "run.exe")
         if not os.path.isfile(exe):
             raise WorkerError(f"{self.name}: run.exe not found in {host_dir}; the VigenFlow engine is not installed")
-        cmd = [exe, "--mode", "performance", "--worker",
-               "--height", str(height), "--width", str(width)]
+        cmd = [exe] + ([] if self.one_shot else ["--mode", "performance", "--worker"]) + \
+              ["--height", str(height), "--width", str(width)]
         if lora_stack:   # Load LoRA nodes: own list, one strength per LoRA, no --lora_scale
             self._lora_config, names = write_lora_stack(lora_stack)
             cmd += ["--lora_config", self._lora_config]
@@ -291,7 +296,7 @@ class NPUWorker:
                 cmd += ["--lora", lora]
             if lora != "none" and lora_scale is not None:
                 cmd += ["--lora_scale", str(lora_scale)]
-        for image in input_images or ():   # edit models: references (each request sends them too)
+        for image in () if self.one_shot else input_images or ():   # edit references (requests send them too)
             cmd += ["--input_image", image]
         if spec["weights_path"]:
             cmd += ["--weights_path", spec["weights_path"]]
@@ -300,13 +305,19 @@ class NPUWorker:
         # The host resolves its default weights, NPU files and LoRA paths relative to its own folder.
         # stderr (progress bars, errors) is copied to this process's stderr, so it still shows
         # in the ComfyUI console, and its tail is kept for progress() and error messages.
-        self.proc = subprocess.Popen(cmd, cwd=host_dir, stdin=subprocess.PIPE,
-                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
         self._buf = b""
         self._next_id = 0
         self._tail = b""
         self._pending = b""
-        threading.Thread(target=self._copy_stderr, daemon=True).start()
+        self._log = b""
+        self._peak = 0.0
+        self._cmd, self._cwd = cmd, host_dir
+        self.proc = None
+        if self.one_shot:
+            return
+        self.proc = subprocess.Popen(cmd, cwd=host_dir, stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+        threading.Thread(target=self._copy_output, args=(self.proc.stderr,), daemon=True).start()
 
     # Lines only worker mode prints: its memory mode, and H/W/Prompt once at start-up (with the
     # built-in demo prompt). Left out so the console matches a normal run; the node prints
@@ -329,8 +340,8 @@ class NPUWorker:
             self._pending = b""
         return shown
 
-    def _copy_stderr(self):
-        fd = self.proc.stderr.fileno()
+    def _copy_output(self, stream):
+        fd = stream.fileno()
         while True:
             try:
                 chunk = os.read(fd, 4096)
@@ -338,7 +349,9 @@ class NPUWorker:
                 break
             if not chunk:
                 break
-            shown = self._console(chunk)
+            if self.one_shot:   # a normal run: shown as is, kept whole for the timings
+                self._log += chunk
+            shown = chunk if self.one_shot else self._console(chunk)
             if shown:
                 try:
                     os.write(2, shown)
@@ -369,12 +382,14 @@ class NPUWorker:
         return self._next_id
 
     def alive(self):
-        return self.proc.poll() is None
+        return self.one_shot or self.proc.poll() is None
 
     def memory_gb(self):
         """(resident now, peak since this worker started) in GB, from /proc. NPU buffers are
         host RAM mapped into the worker, so they are included. (0, 0) if it has exited."""
-        now = peak = 0.0
+        now, peak = 0.0, self._peak
+        if self.proc is None:
+            return now, peak
         try:
             with open(f"/proc/{self.proc.pid}/status") as f:
                 for line in f:
@@ -404,6 +419,8 @@ class NPUWorker:
     def generate(self, prompt, seed, output, steps=None, should_cancel=None, input_images=None):
         """Runs one image, writes the PNG to `output`, returns the worker's reply (timings).
         `should_cancel` is called about every 0.2 s while waiting; True kills the worker."""
+        if self.one_shot:
+            return self._generate_once(prompt, seed, output, steps, should_cancel, input_images)
         self._next_id += 1
         request = {"id": self._next_id, "prompt": prompt, "seed": int(seed),
                    "steps": int(steps or self.spec["steps"]), "output": os.path.abspath(output)}
@@ -427,6 +444,45 @@ class NPUWorker:
             raise WorkerError(f"{self.name} NPU worker: {reply.get('error', 'request failed')}")
         return reply
 
+    _STAGE = re.compile(rb"(Vision Encoder|Text Encoder|VAE Encoder|Denoising|VAE Decoder): *100%\|[^|]*\| *"
+                        rb"(\d+)/\d+ \[[^,\]]*, *([\d.]+)(s/it|it/s)")
+
+    def _generate_once(self, prompt, seed, output, steps, should_cancel, input_images):
+        """One run.exe for one image (no worker mode); timings from its progress bars and E2E line."""
+        self._next_id += 1
+        cmd = self._cmd + [f"--prompt={prompt}", "--seed", str(int(seed)), "--steps", str(int(steps or self.spec["steps"])),
+                           "--output", os.path.abspath(output)]
+        for image in input_images or ():
+            cmd += ["--input_image", os.path.abspath(image)]
+        self._tail = self._log = b""
+        started = time.time()
+        self.proc = subprocess.Popen(cmd, cwd=self._cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT, bufsize=0)
+        reader = threading.Thread(target=self._copy_output, args=(self.proc.stdout,), daemon=True)
+        reader.start()
+        while self.proc.poll() is None:
+            self._peak = max(self._peak, self.memory_gb()[1])
+            if should_cancel is not None and should_cancel():
+                self.proc.kill()
+                self.proc.wait()
+                raise Cancelled()
+            time.sleep(0.2)
+        reader.join(timeout=5)
+        if self.proc.returncode != 0 or not os.path.isfile(output):
+            raise self._exit_error()
+        seconds = {}
+        for stage, count, value, unit in self._STAGE.findall(self._log.replace(b"\r", b"\n")):
+            per_item = float(value) if unit == b"s/it" else 1.0 / max(float(value), 1e-9)
+            seconds[stage] = seconds.get(stage, 0.0) + int(count) * per_item
+        e2e = re.search(rb"E2E runtime: *([\d.]+) *s", self._log)
+        reference = seconds.get(b"Vision Encoder", 0.0) + seconds.get(b"VAE Encoder", 0.0)
+        return {"ok": True, "output": output, "conditioning_seconds": reference,
+                "text_encoder_seconds": seconds.get(b"Text Encoder", 0.0),
+                "denoising_seconds": seconds.get(b"Denoising", 0.0),
+                "vae_decoder_seconds": seconds.get(b"VAE Decoder", 0.0),
+                "e2e_seconds": float(e2e.group(1)) if e2e else time.time() - started,
+                "request_seconds": time.time() - started, "reused": False}
+
     def close(self, kill=False):
         self._close_process(kill)
         if self._lora_config:
@@ -437,7 +493,7 @@ class NPUWorker:
             self._lora_config = None
 
     def _close_process(self, kill):
-        if self.proc.poll() is None:
+        if self.proc is not None and self.proc.poll() is None:
             try:
                 if kill:
                     self.proc.kill()

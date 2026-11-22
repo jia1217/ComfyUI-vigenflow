@@ -2,8 +2,9 @@
 
 Text-to-image and image editing on the **AMD Ryzen AI NPU** in ComfyUI, with the
 [VigenFlow](https://github.com/jia1217/vigenflow) engine: FLUX.2 Klein 4B, FLUX.1 Schnell, Krea 2 Turbo,
-Qwen-Image 2.1 Turbo and Z-Image Turbo, and FLUX.2 Klein 4B Edit (1–4 reference images).
-Everything runs on the NPU: about 8 s per 1024×1024 FLUX.2 image, 17 s per FLUX.2 edit.
+Qwen-Image 2.1 Turbo and Z-Image Turbo, and the edit models FLUX.2 Klein 4B Edit (1–4 reference images)
+and Qwen-Image 2.1 Turbo Edit (1–10). Everything runs on the NPU: about 8 s per 1024×1024 FLUX.2
+image, 17 s per FLUX.2 edit, 55 s per two-image Qwen-Image edit.
 
 ## Quick Start
 
@@ -65,7 +66,11 @@ research and evaluation only) download only after you accept their terms. Read t
 **Size:** `aspect_ratio` (1:1, 4:3, 3:4, 3:2, 2:3, 16:9, 9:16) with sizes of that ratio, or
 `Custom` width and height (16–2048, multiples of 16).
 **Steps:** 0 uses the model's default (FLUX.2 4, FLUX.1 4, Krea 2 8, Qwen-Image 8, Z-Image 8,
-FLUX.2 Edit 4).
+FLUX.2 Edit 4, Qwen-Image Edit 8).
+
+**Qwen-Image 2.1 Turbo Edit** uses the Qwen-Image 2.1 Turbo weights (and the same license,
+see Model licenses) and takes up to 10 references within 16,384 reference tokens: connect
+image_1–image_4 on Edit Prompt and more through its `references` input (VigenFlow: Reference Images).
 
 **Editing output size** (on Image Edit, or from Edit Output Size), as in the VigenFlow Studio:
 `keep_ratio` (default on) fits the first image's shape inside the chosen size (1024 × 1024 →
