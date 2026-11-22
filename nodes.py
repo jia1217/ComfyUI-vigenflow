@@ -197,6 +197,16 @@ def _size_from_latent(latent):
     return width, height
 
 
+def _accept_license_input(models):
+    """The "I agree" switch for models whose weights have their own license (Krea 2, Qwen-Image)."""
+    host = npu_worker.default_host_dir()
+    licensed = [npu_worker.model_spec(host, m) for m in models if npu_worker.model_spec(host, m).get("license")]
+    terms = "; ".join(f"{s['name']}: {s['license']['name']}, {s['license']['url']}" for s in licensed)
+    return ("BOOLEAN", {"default": False,
+                        "tooltip": "On = you accept the model's license (like typing I agree), so its weights "
+                                   f"can download. Only for: {terms or 'none'}"})
+
+
 LORA_NONE = "none"
 
 
@@ -268,7 +278,7 @@ def _resolve_lora_stack(spec, model, stack):
 
 def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale, keep_loaded,
                       lora_file="", unique_id=None, latent_size=None, lora_stack=None, input_images=None,
-                      input_limit="Auto"):
+                      input_limit="Auto", accept_license=False):
     keep_loaded = False   # always release the model after the image (the widget is hidden)
     if not prompt.strip():
         raise ValueError("prompt is empty")
@@ -316,7 +326,7 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
                 PromptServer.instance.send_progress_text(f"{model}: {text}", unique_id)
 
         try:
-            installer.ensure_model(spec, install_status, _interrupted)
+            installer.ensure_model(spec, install_status, _interrupted, accept_license)
         except npu_worker.Cancelled:
             if model_management is not None:
                 model_management.throw_exception_if_processing_interrupted()
@@ -457,6 +467,7 @@ class VigenFlowTextToImage:
                 "lora_scale": lora["lora_scale"],
                 "lora_file": ("STRING", {"default": "",
                                          "tooltip": "Path to a .safetensors LoRA; replaces the 'lora' choice when set."}),
+                "accept_license": _accept_license_input(models),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
             "optional": {
@@ -473,7 +484,8 @@ class VigenFlowTextToImage:
     CATEGORY = "NPU"
 
     def generate(self, model, prompt, aspect_ratio, size, width, height, steps, seed, lora, lora_scale,
-                 lora_file, keep_loaded=False, unique_id=None, lora_stack=None, prompt_text=None, image_size=None):
+                 lora_file, keep_loaded=False, unique_id=None, lora_stack=None, prompt_text=None, image_size=None,
+                 accept_license=False):
         if image_size is not None:
             width, height = _size_box(image_size)[:2]
         else:
@@ -481,7 +493,7 @@ class VigenFlowTextToImage:
         if prompt_text is not None:
             prompt = prompt_text
         return run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale,
-                                 keep_loaded, lora_file, unique_id, None, lora_stack)
+                                 keep_loaded, lora_file, unique_id, None, lora_stack, accept_license=accept_license)
 
 
 class VigenFlowImageEdit:
@@ -517,6 +529,7 @@ class VigenFlowImageEdit:
                                "larger. Auto = 2048 and within the model's reference token budget (larger "
                                "references first). Smaller is faster: each 16x16 block is one token."}),
                 "size_from_image": SIZE_FROM_IMAGE,
+                "accept_license": _accept_license_input(models),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
             "optional": {
@@ -537,7 +550,8 @@ class VigenFlowImageEdit:
     CATEGORY = "NPU"
 
     def edit(self, model, prompt, aspect_ratio, size, width, height, keep_ratio, match_input, steps, seed,
-             lora, lora_scale, lora_file, input_limit="Auto", size_from_image=1, unique_id=None, lora_stack=None,
+             lora, lora_scale, lora_file, input_limit="Auto", size_from_image=1, accept_license=False,
+             unique_id=None, lora_stack=None,
              prompt_text=None, image_size=None, references=None, image=None, edit_input=None):
         images = (list(edit_input["images"]) if edit_input is not None else []) + \
                  ([image[i:i + 1] for i in range(image.shape[0])] if image is not None else []) + list(references or [])
@@ -558,7 +572,7 @@ class VigenFlowImageEdit:
         if edit_input is not None:
             prompt = edit_input["prompt"]
         return run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale, False,
-                                 lora_file, unique_id, None, lora_stack, images, input_limit)
+                                 lora_file, unique_id, None, lora_stack, images, input_limit, accept_license)
 
 
 class VigenFlowPrompt:
@@ -831,6 +845,13 @@ class VigenFlowSaveImage:
 
 if PromptServer is not None and getattr(PromptServer, "instance", None) is not None:
     from aiohttp import web
+
+    @PromptServer.instance.routes.get("/vigenflow/licenses")
+    async def _vigenflow_licenses(request):
+        """{model: license name or null}, for greying out accept_license in the browser."""
+        host = npu_worker.default_host_dir()
+        return web.json_response({m: (npu_worker.model_spec(host, m).get("license") or {}).get("name")
+                                  for m in npu_worker.available_models(host)})
 
     @PromptServer.instance.routes.get("/vigenflow/loras")
     async def _vigenflow_loras(request):

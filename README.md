@@ -41,8 +41,10 @@ AMD XRT with the NPU driver, and Boost.ProgramOptions 1.83
 Krea 2 Turbo (Krea 2 Community License) and Qwen-Image 2.1 Turbo (Qwen Research License,
 research and evaluation only) download only after you accept their terms. Read them on
 [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) and
-[Qwen-Image 2.1 Turbo](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo), then create
-`vigenflow_settings.json` in this folder:
+[Qwen-Image 2.1 Turbo](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo), then turn on
+**accept_license** on the Text to Image or Image Edit node (it means "I agree"; it is greyed out for
+models that do not need it). To accept once for every workflow instead, create
+`vigenflow_settings.json` in this folder and restart ComfyUI:
 
 ```json
 { "accept_licenses": ["krea2_turbo", "qwen_image_2_1_turbo"] }

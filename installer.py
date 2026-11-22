@@ -276,20 +276,22 @@ def weights_ready(spec):
     return os.path.isfile(os.path.join(folder, "prepare_manifest.json"))
 
 
-def ensure_weights(spec, status=None, should_cancel=None):
-    """Download a model's weights with the release's prepare_base.exe on first use."""
+def ensure_weights(spec, status=None, should_cancel=None, accept_license=False):
+    """Download a model's weights with the release's prepare_base.exe on first use. A model under its
+    own license downloads only once it is accepted: accept_license (the node's switch) or its id in
+    accept_licenses of vigenflow_settings.json."""
     if weights_ready(spec):
         return spec["weights_path"]
     if spec["weights_given"] or not spec["engine"]:
         raise InstallError(f"{spec['name']}: no weights in {spec['weights_path']}")
     settings = npu_worker.load_settings()
     license_ = spec.get("license")
-    if license_ and spec["weights_folder"] not in settings["accept_licenses"]:
+    if license_ and not accept_license and spec["weights_folder"] not in settings["accept_licenses"]:
         raise InstallError(
             f"{spec['name']} weights are under the {license_['name']} ({license_['url']}). "
-            f"To accept it and download them, add \"{spec['weights_folder']}\" to \"accept_licenses\" in "
-            f"{os.path.join(npu_worker.NODE_DIR, npu_worker.SETTINGS_FILE)}, for example "
-            f"{{\"accept_licenses\": [\"{spec['weights_folder']}\"]}}, then restart ComfyUI.")
+            "To accept it and download them, turn on accept_license on the node (it means \"I agree\"), "
+            f"or add \"{spec['weights_folder']}\" to \"accept_licenses\" in "
+            f"{os.path.join(npu_worker.NODE_DIR, npu_worker.SETTINGS_FILE)} and restart ComfyUI.")
     prepare = os.path.join(settings["engine"]["dir"], "prepare")
     weights_dir = os.path.dirname(spec["weights_path"])
     os.makedirs(weights_dir, exist_ok=True)
@@ -316,7 +318,7 @@ def ensure_weights(spec, status=None, should_cancel=None):
     return spec["weights_path"]
 
 
-def ensure_model(spec, status=None, should_cancel=None):
+def ensure_model(spec, status=None, should_cancel=None, accept_license=False):
     """Everything one model needs before its worker starts."""
     problems = check_system()
     if problems:
@@ -326,4 +328,4 @@ def ensure_model(spec, status=None, should_cancel=None):
         missing = missing_libraries(os.path.join(spec["host_dir"], "run.exe"))
         if missing:
             raise InstallError("The VigenFlow engine needs these libraries: " + ", ".join(missing))
-    ensure_weights(spec, status, should_cancel)
+    ensure_weights(spec, status, should_cancel, accept_license)

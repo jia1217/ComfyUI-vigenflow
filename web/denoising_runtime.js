@@ -155,7 +155,7 @@ const OLD_LAYOUTS = {
     ],
 };
 const DEFAULTS = { lora: "none", lora_scale: 1, lora_file: "", keep_loaded: false, keep_ratio: true,
-                   match_input: false };
+                   match_input: false, accept_license: false };
 
 const isNumber = (v) => typeof v === "number";
 const KIND = {
@@ -203,6 +203,26 @@ function migrateOldValues(node, info) {
         if (widget.name in byName && byName[widget.name] !== undefined) widget.value = byName[widget.name];
         else if (widget.name in DEFAULTS) widget.value = DEFAULTS[widget.name];
     }
+}
+
+// accept_license only matters for models whose weights have their own license: greyed out otherwise.
+let modelLicenses = null;
+
+async function fetchLicenses() {
+    try {
+        const response = await api.fetchApi("/vigenflow/licenses");
+        modelLicenses = response.ok ? await response.json() : null;
+    } catch {
+        modelLicenses = null;
+    }
+}
+
+function updateLicenseWidget(node) {
+    const accept = findWidget(node, "accept_license");
+    const model = findWidget(node, "model");
+    if (!accept || !model || !modelLicenses) return;
+    accept.disabled = !modelLicenses[model.value];
+    node.setDirtyCanvas(true, true);
 }
 
 // VigenFlow: Load LoRA lists only the LoRAs of its model: {model: ["none", names...]} from
@@ -488,10 +508,21 @@ app.registerExtension({
             return;
         }
         if (!sizeNodes.has(nodeData.name)) return;
+        if (generatorNodes.has(nodeData.name) && !modelLicenses) await fetchLicenses();
 
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function (...args) {
             const result = onNodeCreated?.apply(this, args);
+            const model = findWidget(this, "model");
+            if (model && findWidget(this, "accept_license")) {
+                const callback = model.callback;
+                model.callback = (...cbArgs) => {
+                    const value = callback?.apply(model, cbArgs);
+                    updateLicenseWidget(this);
+                    return value;
+                };
+                updateLicenseWidget(this);
+            }
             for (const name of ["aspect_ratio", "match_input", "keep_ratio", "size", "width", "height",
                                 "size_from_image"]) {
                 const widget = findWidget(this, name);
@@ -513,6 +544,7 @@ app.registerExtension({
         nodeType.prototype.onConfigure = function (info) {
             onConfigure?.call(this, info);
             migrateOldValues(this, info);
+            updateLicenseWidget(this);
             if (nodeData.name === "VigenFlowTextToImage") {
                 this.properties.vigenflow_layout = LAYOUT;
                 const latent = this.findInputSlot("latent_size");   // removed input of older graphs
