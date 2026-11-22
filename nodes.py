@@ -150,14 +150,19 @@ def _reference_plan(sizes, limit, budget):
 
 def _prepare_references(images, folder, limit="Auto", budget=0):
     """ComfyUI IMAGE tensors -> PNG files for the edit worker, sized by _reference_plan (the part
-    beyond the multiple of 16 is cropped from the center). Returns (paths, tokens)."""
+    beyond the multiple of 16 is cropped from the center). Returns (paths, tokens, one line per
+    reference: its size and, when changed, the size sent)."""
     pictures = []
     for tensor in images:
         array = (tensor[0].clamp(0, 1).cpu().numpy() * 255.0 + 0.5).astype(np.uint8)
         pictures.append(Image.fromarray(array[..., :3]).convert("RGB"))
     plan = _reference_plan([im.size for im in pictures], limit, budget)
-    paths, tokens = [], 0
-    for im, ((w, h), (tw, th)) in zip(pictures, plan):
+    paths, tokens, lines = [], 0, []
+    for i, (im, ((w, h), (tw, th))) in enumerate(zip(pictures, plan), 1):
+        sent = (tw // 16) * (th // 16)
+        size = f"{im.size[0]} × {im.size[1]}"
+        lines.append(f"· image {i}: {size}" + (f" → resized {tw} × {th}" if (tw, th) != im.size else "") +
+                     f" ({sent} tokens)")
         if (w, h) != im.size:
             im = im.resize((w, h), Image.LANCZOS)
         left, top = (w - tw) // 2, (h - th) // 2
@@ -165,8 +170,8 @@ def _prepare_references(images, folder, limit="Auto", budget=0):
         path = os.path.join(folder, f"vigenflow_ref_{uuid.uuid4().hex}.png")
         im.save(path)
         paths.append(path)
-        tokens += (tw // 16) * (th // 16)
-    return paths, tokens
+        tokens += sent
+    return paths, tokens, lines
 
 
 def _chosen_size(aspect_ratio, size, width, height):
@@ -311,9 +316,9 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
     tmp_dir = folder_paths.get_temp_directory() if folder_paths else tempfile.gettempdir()
     os.makedirs(tmp_dir, exist_ok=True)
     png = os.path.join(tmp_dir, f"vigenflow_npu_{uuid.uuid4().hex}.png")
-    refs, ref_tokens = [], 0
+    refs, ref_tokens, ref_lines = [], 0, []
     try:
-        refs, ref_tokens = _prepare_references(images, tmp_dir, input_limit, spec["reference_token_limit"])
+        refs, ref_tokens, ref_lines = _prepare_references(images, tmp_dir, input_limit, spec["reference_token_limit"])
         if lora == "config default":   # no --lora: the host merges the enabled entries with their own scales
             lora, scale = None, None
         else:
@@ -395,11 +400,14 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
               f"{'' if keep_loaded else '; released after this image'}")
     loras = (" LoRAs " + ", ".join(f"{os.path.basename(f)} x{s:g}" for f, s, _ in stack) + ";") if stack else ""
     print(f"[VigenFlow {model}] {width}x{height} seed {seed} steps {steps};{loras} {timings}; {memory}", flush=True)
+    for line in ref_lines:
+        print(f"[VigenFlow {model}] reference {line[2:]}", flush=True)
     for note in trigger_notes:
         print(f"[VigenFlow {model}] LoRA trigger words, {note}", flush=True)
     reference_s = reply.get("conditioning_seconds", 0.0)
     runtime_summary = (
-        (f"References {len(refs)} image{'s' * (len(refs) > 1)}, {ref_tokens} tokens\n"
+        (f"References {len(refs)} image{'s' * (len(refs) > 1)}, {ref_tokens} tokens\n" +
+         "".join(line + "\n" for line in ref_lines) +
          f"Reference encoder runtime {reference_s:.2f} s\n"
          f"Output size {width} × {height}\n" if refs else "") +
         f"Text encoder runtime {text_s:.2f} s\n"
