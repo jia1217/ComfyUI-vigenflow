@@ -78,7 +78,9 @@ function updateSizeWidgets(node) {
         const widget = findWidget(node, name);
         if (widget) Object.assign(widget, { hidden: fromLatent || fromSizeNode || !custom, disabled: fromImage });
     }
-    if (match) updateSizeNote(node, fromSizeNode, fromImage, keep?.value, custom);
+    const from = findWidget(node, "size_from_image");
+    if (from) Object.assign(from, { hidden: fromSizeNode, disabled: !fromImage && !keep?.value });
+    if (match) updateSizeNote(node, fromSizeNode, fromImage, keep?.value, custom, from?.value ?? 1);
     const [width] = node.size;
     node.setSize([width, node.computeSize()[1]]);
     node.setDirtyCanvas(true, true);
@@ -107,7 +109,7 @@ function updateLoraWidgets(node) {
 
 // Edit size nodes: one line saying what the output size will be (it depends on the first image),
 // drawn on the canvas like ComfyUI's own widgets.
-function updateSizeNote(node, hidden, fromImage, keepRatio, custom) {
+function updateSizeNote(node, hidden, fromImage, keepRatio, custom, source) {
     let note = findWidget(node, "vigenflow_size_note");
     if (!note) {
         note = node.addCustomWidget({
@@ -128,8 +130,8 @@ function updateSizeNote(node, hidden, fromImage, keepRatio, custom) {
     }
     const box = custom ? `${findWidget(node, "width")?.value} × ${findWidget(node, "height")?.value}`
                        : String(findWidget(node, "size")?.value);
-    note.text = fromImage ? "Output: the first image's own size (up to 2048)"
-        : keepRatio ? `Output: first image's shape inside ${box}` : `Output: ${box}`;
+    note.text = fromImage ? `Output: image ${source}'s own size (up to 2048)`
+        : keepRatio ? `Output: image ${source}'s shape inside ${box}` : `Output: ${box}`;
     note.hidden = hidden;
 }
 
@@ -490,7 +492,8 @@ app.registerExtension({
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function (...args) {
             const result = onNodeCreated?.apply(this, args);
-            for (const name of ["aspect_ratio", "match_input", "keep_ratio", "size", "width", "height"]) {
+            for (const name of ["aspect_ratio", "match_input", "keep_ratio", "size", "width", "height",
+                                "size_from_image"]) {
                 const widget = findWidget(this, name);
                 if (!widget) continue;
                 const callback = widget.callback;

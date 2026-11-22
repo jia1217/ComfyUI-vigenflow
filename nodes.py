@@ -105,13 +105,18 @@ def _edit_output_size(image_w, image_h, box_w, box_h, keep_ratio, match_input):
     return tuple(max(16, min(2048, int(round(side * scale / 16)) * 16)) for side in (image_w, image_h))
 
 
+SIZE_FROM_IMAGE = ("INT", {"default": 1, "min": 1, "max": 4,
+                           "tooltip": "Which image keep_ratio and match_input use (1 = the image being edited)"})
+
+
 def _size_box(image_size):
-    """VIGENFLOW_SIZE -> (width, height, keep_ratio, match_input). VigenFlow: Image Size sends
-    (width, height); VigenFlow: Edit Output Size also sends the two edit options."""
+    """VIGENFLOW_SIZE -> (width, height, keep_ratio, match_input, size_from_image). VigenFlow: Image
+    Size sends (width, height); VigenFlow: Edit Output Size also sends the edit options."""
     if isinstance(image_size, dict):
-        return (*image_size["size"], image_size["keep_ratio"], image_size["match_input"])
+        return (*image_size["size"], image_size["keep_ratio"], image_size["match_input"],
+                image_size.get("size_from_image", 1))
     width, height = image_size
-    return width, height, False, False
+    return width, height, False, False, 1
 
 
 INPUT_LIMITS = ["Auto", "512", "1024", "2048"]   # the VigenFlow Studio's "Input limit"
@@ -509,6 +514,7 @@ class VigenFlowImageEdit:
                     "tooltip": "References keep their own size; this only scales down those whose long edge is "
                                "larger. Auto = 2048 and within the model's reference token budget (larger "
                                "references first). Smaller is faster: each 16x16 block is one token."}),
+                "size_from_image": SIZE_FROM_IMAGE,
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
             "optional": {
@@ -529,18 +535,20 @@ class VigenFlowImageEdit:
     CATEGORY = "NPU"
 
     def edit(self, model, prompt, aspect_ratio, size, width, height, keep_ratio, match_input, steps, seed,
-             lora, lora_scale, lora_file, input_limit="Auto", unique_id=None, lora_stack=None, prompt_text=None,
-             image_size=None, references=None, image=None, edit_input=None):
+             lora, lora_scale, lora_file, input_limit="Auto", size_from_image=1, unique_id=None, lora_stack=None,
+             prompt_text=None, image_size=None, references=None, image=None, edit_input=None):
         images = (list(edit_input["images"]) if edit_input is not None else []) + \
                  ([image[i:i + 1] for i in range(image.shape[0])] if image is not None else []) + list(references or [])
         if not images:
             raise ValueError("Connect VigenFlow: Edit Prompt to edit_input, Reference Images to references, "
                              "or an image to image")
-        image = images[0]
         if image_size is not None:
-            box_w, box_h, keep_ratio, match_input = _size_box(image_size)
+            box_w, box_h, keep_ratio, match_input, size_from_image = _size_box(image_size)
         else:
             box_w, box_h = _chosen_size(aspect_ratio, size, width, height)
+        if (keep_ratio or match_input) and size_from_image > len(images):
+            raise ValueError(f"size_from_image is {size_from_image}, but there are only {len(images)} image(s)")
+        image = images[size_from_image - 1]
         width, height = _edit_output_size(int(image.shape[2]), int(image.shape[1]), box_w, box_h,
                                           keep_ratio, match_input)
         if prompt_text is not None:
@@ -741,18 +749,19 @@ class VigenFlowEditSize:
 
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {**_size_preset_inputs(), **_edit_toggle_inputs()}}
+        return {"required": {**_size_preset_inputs(), **_edit_toggle_inputs(), "size_from_image": SIZE_FROM_IMAGE}}
 
     RETURN_TYPES = ("VIGENFLOW_SIZE",)
     RETURN_NAMES = ("image_size",)
     FUNCTION = "get_size"
     CATEGORY = "NPU"
 
-    def get_size(self, aspect_ratio, size, width, height, keep_ratio, match_input):
+    def get_size(self, aspect_ratio, size, width, height, keep_ratio, match_input, size_from_image=1):
         width, height = _chosen_size(aspect_ratio, size, width, height)
         if not (16 <= width <= 2048 and 16 <= height <= 2048) or width % 16 or height % 16:
             raise ValueError("width and height must be 16-2048 pixels and multiples of 16")
-        return ({"size": (width, height), "keep_ratio": keep_ratio, "match_input": match_input},)
+        return ({"size": (width, height), "keep_ratio": keep_ratio, "match_input": match_input,
+                 "size_from_image": size_from_image},)
 
 
 class VigenFlowCompare:
