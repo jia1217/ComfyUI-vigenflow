@@ -117,23 +117,42 @@ def _size_box(image_size):
 INPUT_LIMITS = ["Auto", "512", "1024", "2048"]   # the VigenFlow Studio's "Input limit"
 
 
-def _reference_size(width, height, limit):
-    """A reference's size as the VigenFlow Studio sends it: its own shape, scaled down only when the
-    long edge is over the limit (Auto = 2048), sides rounded down to multiples of 16."""
-    long_edge = 2048 if limit == "Auto" else int(limit)
-    factor = min(1.0, long_edge / max(width, height))
+def _aligned(width, height, factor):
     w, h = max(1, round(width * factor)), max(1, round(height * factor))
     return (w, h), (max(16, w // 16 * 16), max(16, h // 16 * 16))
 
 
-def _prepare_references(images, folder, limit="Auto"):
-    """ComfyUI IMAGE tensors -> PNG files for the edit worker, each at its own size (see
-    _reference_size; the part beyond the multiple of 16 is cropped from the center)."""
-    paths, tokens = [], 0
+def _reference_plan(sizes, limit, budget):
+    """Each reference's (scaled, sent) size, as the VigenFlow Studio plans them: its own shape,
+    scaled down only when the long edge is over the limit (Auto = 2048), sides rounded down to
+    multiples of 16. With Auto and a model token budget (16x16 blocks), larger references are
+    reduced first until the total fits."""
+    long_edge = 2048 if limit == "Auto" else int(limit)
+    full = [_aligned(w, h, min(1.0, long_edge / max(w, h))) for w, h in sizes]
+    tokens = lambda plan: sum((tw // 16) * (th // 16) for _, (tw, th) in plan)
+    if limit != "Auto" or not budget or tokens(full) <= budget:
+        return full
+    plan_at = lambda area: [_aligned(w, h, min(1.0, (area / (w * h)) ** 0.5)) for (w, h), _ in full]
+    lower, upper = 0.0, float(max(w * h for (w, h), _ in full))
+    for _ in range(24):
+        middle = (lower + upper) / 2
+        if tokens(plan_at(middle)) <= budget:
+            lower = middle
+        else:
+            upper = middle
+    return plan_at(lower)
+
+
+def _prepare_references(images, folder, limit="Auto", budget=0):
+    """ComfyUI IMAGE tensors -> PNG files for the edit worker, sized by _reference_plan (the part
+    beyond the multiple of 16 is cropped from the center). Returns (paths, tokens)."""
+    pictures = []
     for tensor in images:
         array = (tensor[0].clamp(0, 1).cpu().numpy() * 255.0 + 0.5).astype(np.uint8)
-        im = Image.fromarray(array[..., :3]).convert("RGB")
-        (w, h), (tw, th) = _reference_size(*im.size, limit)
+        pictures.append(Image.fromarray(array[..., :3]).convert("RGB"))
+    plan = _reference_plan([im.size for im in pictures], limit, budget)
+    paths, tokens = [], 0
+    for im, ((w, h), (tw, th)) in zip(pictures, plan):
         if (w, h) != im.size:
             im = im.resize((w, h), Image.LANCZOS)
         left, top = (w - tw) // 2, (h - th) // 2
@@ -279,7 +298,7 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
     png = os.path.join(tmp_dir, f"vigenflow_npu_{uuid.uuid4().hex}.png")
     refs, ref_tokens = [], 0
     try:
-        refs, ref_tokens = _prepare_references(images, tmp_dir, input_limit)
+        refs, ref_tokens = _prepare_references(images, tmp_dir, input_limit, spec["reference_token_limit"])
         if lora == "config default":   # no --lora: the host merges the enabled entries with their own scales
             lora, scale = None, None
         else:
@@ -488,7 +507,8 @@ class VigenFlowImageEdit:
                 "input_limit": (INPUT_LIMITS, {
                     "default": "Auto",
                     "tooltip": "References keep their own size; this only scales down those whose long edge is "
-                               "larger (Auto = 2048). Smaller is faster: each 16x16 block is one token."}),
+                               "larger. Auto = 2048 and within the model's reference token budget (larger "
+                               "references first). Smaller is faster: each 16x16 block is one token."}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
             "optional": {

@@ -62,7 +62,8 @@
       "steps": 4,
       "allowed_steps": [
         4
-      ]
+      ],
+      "reference_token_limit": 65536
     }
   }
 }

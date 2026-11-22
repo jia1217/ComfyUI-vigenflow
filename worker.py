@@ -137,6 +137,7 @@ def load_settings(host_dir=NODE_DIR):
         specs[name] = {
             "name": name, "id": model_id, "engine": not entry.get("host_dir"), "kind": kind,
             "max_images": int(entry.get("max_images", 1)) if kind == "edit" else 0,
+            "reference_token_limit": int(entry.get("reference_token_limit", 0)),   # 0: no budget
             "host_dir": host, "npu_files_path": npu,
             "weights_path": weights or (os.path.join(weights_dir, weights_id) if weights_id else None),
             "weights_given": weights is not None,

@@ -72,7 +72,9 @@ FLUX.2 Edit 4).
 long side 1024); `match_input` uses the first image's own size (up to 2048); with both off the
 chosen size is used as is. Each reference keeps its own size (as in the VigenFlow Studio):
 `input_limit` (Auto = 2048, or 512 / 1024 / 2048) only scales down references whose long edge is
-larger, and sides are rounded down to multiples of 16. Each 16 × 16 block is one token, so smaller
+larger, and sides are rounded down to multiples of 16. Auto also keeps the total within the model's
+reference token budget (`reference_token_limit` in `models.json`; FLUX.2 Edit 65,536, which four
+2048 × 2048 references fill exactly), reducing larger references first. Each 16 × 16 block is one token, so smaller
 references edit faster. FLUX.2 Klein 4B Edit uses the FLUX.2 Klein 4B weights (no extra download) and
 its LoRAs (folder `flux2_klein_4B`).
 
