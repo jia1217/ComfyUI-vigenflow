@@ -70,7 +70,10 @@ FLUX.2 Edit 4).
 **Editing output size** (on Image Edit, or from Edit Output Size), as in the VigenFlow Studio:
 `keep_ratio` (default on) fits the first image's shape inside the chosen size (1024 × 1024 →
 long side 1024); `match_input` uses the first image's own size (up to 2048); with both off the
-chosen size is used as is. Each reference is center-cropped to the output's shape and resized to it. FLUX.2 Klein 4B Edit uses the FLUX.2 Klein 4B weights (no extra download) and
+chosen size is used as is. Each reference keeps its own size (as in the VigenFlow Studio):
+`input_limit` (Auto = 2048, or 512 / 1024 / 2048) only scales down references whose long edge is
+larger, and sides are rounded down to multiples of 16. Each 16 × 16 block is one token, so smaller
+references edit faster. FLUX.2 Klein 4B Edit uses the FLUX.2 Klein 4B weights (no extra download) and
 its LoRAs (folder `flux2_klein_4B`).
 
 ## LoRAs

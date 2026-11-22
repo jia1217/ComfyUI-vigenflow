@@ -114,25 +114,35 @@ def _size_box(image_size):
     return width, height, False, False
 
 
-def _prepare_references(images, width, height, folder):
-    """ComfyUI IMAGE tensors -> PNG files of width x height for the edit worker: each one is
-    center-cropped to that shape and resized (as the VigenFlow server prepares references)."""
-    paths = []
+INPUT_LIMITS = ["Auto", "512", "1024", "2048"]   # the VigenFlow Studio's "Input limit"
+
+
+def _reference_size(width, height, limit):
+    """A reference's size as the VigenFlow Studio sends it: its own shape, scaled down only when the
+    long edge is over the limit (Auto = 2048), sides rounded down to multiples of 16."""
+    long_edge = 2048 if limit == "Auto" else int(limit)
+    factor = min(1.0, long_edge / max(width, height))
+    w, h = max(1, round(width * factor)), max(1, round(height * factor))
+    return (w, h), (max(16, w // 16 * 16), max(16, h // 16 * 16))
+
+
+def _prepare_references(images, folder, limit="Auto"):
+    """ComfyUI IMAGE tensors -> PNG files for the edit worker, each at its own size (see
+    _reference_size; the part beyond the multiple of 16 is cropped from the center)."""
+    paths, tokens = [], 0
     for tensor in images:
         array = (tensor[0].clamp(0, 1).cpu().numpy() * 255.0 + 0.5).astype(np.uint8)
         im = Image.fromarray(array[..., :3]).convert("RGB")
-        src_w, src_h = im.size
-        target = width / height
-        if src_w / src_h > target:           # wider: crop the sides
-            crop_w = round(src_h * target)
-            box = ((src_w - crop_w) // 2, 0, (src_w - crop_w) // 2 + crop_w, src_h)
-        else:                                 # taller: crop top and bottom
-            crop_h = round(src_w / target)
-            box = (0, (src_h - crop_h) // 2, src_w, (src_h - crop_h) // 2 + crop_h)
+        (w, h), (tw, th) = _reference_size(*im.size, limit)
+        if (w, h) != im.size:
+            im = im.resize((w, h), Image.LANCZOS)
+        left, top = (w - tw) // 2, (h - th) // 2
+        im = im.crop((left, top, left + tw, top + th)) if (tw, th) != (w, h) else im
         path = os.path.join(folder, f"vigenflow_ref_{uuid.uuid4().hex}.png")
-        im.crop(box).resize((width, height), Image.LANCZOS).save(path)
+        im.save(path)
         paths.append(path)
-    return paths
+        tokens += (tw // 16) * (th // 16)
+    return paths, tokens
 
 
 def _chosen_size(aspect_ratio, size, width, height):
@@ -233,7 +243,8 @@ def _resolve_lora_stack(spec, model, stack):
 
 
 def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale, keep_loaded,
-                      lora_file="", unique_id=None, latent_size=None, lora_stack=None, input_images=None):
+                      lora_file="", unique_id=None, latent_size=None, lora_stack=None, input_images=None,
+                      input_limit="Auto"):
     keep_loaded = False   # always release the model after the image (the widget is hidden)
     if not prompt.strip():
         raise ValueError("prompt is empty")
@@ -266,9 +277,9 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
     tmp_dir = folder_paths.get_temp_directory() if folder_paths else tempfile.gettempdir()
     os.makedirs(tmp_dir, exist_ok=True)
     png = os.path.join(tmp_dir, f"vigenflow_npu_{uuid.uuid4().hex}.png")
-    refs = []
+    refs, ref_tokens = [], 0
     try:
-        refs = _prepare_references(images, width, height, tmp_dir)
+        refs, ref_tokens = _prepare_references(images, tmp_dir, input_limit)
         if lora == "config default":   # no --lora: the host merges the enabled entries with their own scales
             lora, scale = None, None
         else:
@@ -353,7 +364,8 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
         print(f"[VigenFlow {model}] LoRA trigger words, {note}", flush=True)
     reference_s = reply.get("conditioning_seconds", 0.0)
     runtime_summary = (
-        (f"Reference encoder runtime {reference_s:.2f} s ({len(refs)} image{'s' * (len(refs) > 1)})\n"
+        (f"Reference encoder runtime {reference_s:.2f} s ({len(refs)} image{'s' * (len(refs) > 1)}, "
+         f"{ref_tokens} tokens)\n"
          if refs else "") +
         f"Text encoder runtime {text_s:.2f} s\n"
         f"Denoising runtime {denoise_s:.2f} s\n"
@@ -473,6 +485,10 @@ class VigenFlowImageEdit:
                 **{k: v for k, v in _lora_inputs(npu_worker.all_lora_names(host)).items() if k != "keep_loaded"},
                 "lora_file": ("STRING", {"default": "",
                                          "tooltip": "Path to a .safetensors LoRA; replaces the 'lora' choice when set."}),
+                "input_limit": (INPUT_LIMITS, {
+                    "default": "Auto",
+                    "tooltip": "References keep their own size; this only scales down those whose long edge is "
+                               "larger (Auto = 2048). Smaller is faster: each 16x16 block is one token."}),
             },
             "hidden": {"unique_id": "UNIQUE_ID"},
             "optional": {
@@ -493,8 +509,8 @@ class VigenFlowImageEdit:
     CATEGORY = "NPU"
 
     def edit(self, model, prompt, aspect_ratio, size, width, height, keep_ratio, match_input, steps, seed,
-             lora, lora_scale, lora_file, unique_id=None, lora_stack=None, prompt_text=None, image_size=None,
-             references=None, image=None, edit_input=None):
+             lora, lora_scale, lora_file, input_limit="Auto", unique_id=None, lora_stack=None, prompt_text=None,
+             image_size=None, references=None, image=None, edit_input=None):
         images = (list(edit_input["images"]) if edit_input is not None else []) + \
                  ([image[i:i + 1] for i in range(image.shape[0])] if image is not None else []) + list(references or [])
         if not images:
@@ -512,7 +528,7 @@ class VigenFlowImageEdit:
         if edit_input is not None:
             prompt = edit_input["prompt"]
         return run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scale, False,
-                                 lora_file, unique_id, None, lora_stack, images)
+                                 lora_file, unique_id, None, lora_stack, images, input_limit)
 
 
 class VigenFlowPrompt:
@@ -620,9 +636,10 @@ class VigenFlowEditPrompt:
                          for i in range(1, cls.SLOTS + 1)},
         }
 
-    RETURN_TYPES = ("VIGENFLOW_EDIT", "IMAGE")
-    RETURN_NAMES = ("edit_input", "image")
-    OUTPUT_TOOLTIPS = ("The prompt and images, to VigenFlow: Image Edit", "The first image, for example for Compare Images")
+    RETURN_TYPES = ("VIGENFLOW_EDIT",) + ("IMAGE",) * SLOTS   # image_1 is where the single image output was
+    RETURN_NAMES = ("edit_input",) + tuple(f"image_{i}" for i in range(1, SLOTS + 1))
+    OUTPUT_TOOLTIPS = ("The prompt and images, to VigenFlow: Image Edit",) + tuple(
+        f"Image {i} as connected, for example for Compare Images" for i in range(1, SLOTS + 1))
     FUNCTION = "build"
     CATEGORY = "NPU"
 
@@ -636,7 +653,8 @@ class VigenFlowEditPrompt:
             raise ValueError("Connect at least one image (for example a Load Image node) to VigenFlow: Edit Prompt")
         if not prompt.strip():
             raise ValueError("The edit prompt is empty")
-        return ({"prompt": prompt, "images": loaded}, loaded[0])
+        return ({"prompt": prompt, "images": loaded},) + tuple(images.get(f"image_{i}")
+                                                              for i in range(1, self.SLOTS + 1))
 
 
 class VigenFlowReferenceImages:
@@ -661,9 +679,10 @@ class VigenFlowReferenceImages:
             },
         }
 
-    RETURN_TYPES = ("VIGENFLOW_IMAGES", "IMAGE")
-    RETURN_NAMES = ("references", "image")
-    OUTPUT_TOOLTIPS = ("All references, to VigenFlow: Image Edit", "The first reference, for example for Compare Images")
+    RETURN_TYPES = ("VIGENFLOW_IMAGES",) + ("IMAGE",) * SLOTS   # image_1 is where the single image output was
+    RETURN_NAMES = ("references",) + tuple(f"image_{i}" for i in range(1, SLOTS + 1))
+    OUTPUT_TOOLTIPS = ("All references, to VigenFlow: Image Edit",) + tuple(
+        f"Reference {i}, for example for Compare Images" for i in range(1, SLOTS + 1))
     FUNCTION = "load"
     CATEGORY = "NPU"
 
@@ -678,7 +697,7 @@ class VigenFlowReferenceImages:
         loaded = [LoadImage().load_image(name)[0][:1] for name in self._names(kwargs)]
         if images is not None:
             loaded += [images[i:i + 1] for i in range(images.shape[0])]
-        return (loaded, loaded[0])
+        return (loaded,) + tuple(loaded[i] if i < len(loaded) else None for i in range(self.SLOTS))
 
     @classmethod
     def IS_CHANGED(cls, images=None, **kwargs):
@@ -732,6 +751,11 @@ class VigenFlowCompare:
 
     def compare(self, before, after):
         from nodes import PreviewImage
+
+        for name, image in (("before", before), ("after", after)):
+            if image is None:
+                raise ValueError(f"Compare Images: '{name}' is connected to an empty image slot "
+                                 "(for example image_2 of Edit Prompt with no image connected)")
 
         preview = PreviewImage()
         files = {"before": preview.save_images(before[:1], "vigenflow.compare.before")["ui"]["images"][0],
