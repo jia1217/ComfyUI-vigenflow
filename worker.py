@@ -132,8 +132,8 @@ def load_settings(host_dir=NODE_DIR):
         weights = _path(host_dir, entry.get("weights_path"), f"models.{name}.weights_path", filename)
         weights_id = entry.get("weights_id") or model_id   # an edit model uses its base model's weights
         kind = entry.get("kind", "text_to_image")
-        if kind not in ("text_to_image", "edit"):
-            raise WorkerError(f"models.{name}.kind in {filename} must be text_to_image or edit")
+        if kind not in ("text_to_image", "edit", "upscale"):
+            raise WorkerError(f"models.{name}.kind in {filename} must be text_to_image, edit or upscale")
         default, allowed, lo, hi = _steps(name, entry, filename)
         specs[name] = {
             "name": name, "id": model_id, "engine": not entry.get("host_dir"), "kind": kind,
@@ -284,18 +284,21 @@ class NPUWorker:
         exe = os.path.join(host_dir, "run.exe")
         if not os.path.isfile(exe):
             raise WorkerError(f"{self.name}: run.exe not found in {host_dir}; the VigenFlow engine is not installed")
+        self.upscale = spec["kind"] == "upscale"   # SeedVR2: one image, a square --upscaling_size
         cmd = [exe] + ([] if self.one_shot else ["--mode", "performance", "--worker"]) + \
-              ["--height", str(height), "--width", str(width)]
-        if lora_stack:   # Load LoRA nodes: own list, one strength per LoRA, no --lora_scale
-            self._lora_config, names = write_lora_stack(lora_stack)
-            cmd += ["--lora_config", self._lora_config]
-            for name in names:
-                cmd += ["--lora", name]
-        else:
-            if lora is not None:   # None: the host merges the entries enabled in loras.jsonc
-                cmd += ["--lora", lora]
-            if lora != "none" and lora_scale is not None:
-                cmd += ["--lora_scale", str(lora_scale)]
+              ([] if self.upscale else ["--height", str(height), "--width", str(width)])
+        self._size = height
+        if not self.upscale:   # SeedVR2 takes no LoRA
+            if lora_stack:   # Load LoRA nodes: own list, one strength per LoRA, no --lora_scale
+                self._lora_config, names = write_lora_stack(lora_stack)
+                cmd += ["--lora_config", self._lora_config]
+                for name in names:
+                    cmd += ["--lora", name]
+            else:
+                if lora is not None:   # None: the host merges the entries enabled in loras.jsonc
+                    cmd += ["--lora", lora]
+                if lora != "none" and lora_scale is not None:
+                    cmd += ["--lora_scale", str(lora_scale)]
         for image in () if self.one_shot else input_images or ():   # edit references (requests send them too)
             cmd += ["--input_image", image]
         if spec["weights_path"]:
@@ -450,8 +453,12 @@ class NPUWorker:
     def _generate_once(self, prompt, seed, output, steps, should_cancel, input_images):
         """One run.exe for one image (no worker mode); timings from its progress bars and E2E line."""
         self._next_id += 1
-        cmd = self._cmd + [f"--prompt={prompt}", "--seed", str(int(seed)), "--steps", str(int(steps or self.spec["steps"])),
-                           "--output", os.path.abspath(output)]
+        if self.upscale:
+            cmd = self._cmd + ["--seed", str(int(seed)), "--upscaling_size", str(self._size),
+                               "--output", os.path.abspath(output)]
+        else:
+            cmd = self._cmd + [f"--prompt={prompt}", "--seed", str(int(seed)),
+                               "--steps", str(int(steps or self.spec["steps"])), "--output", os.path.abspath(output)]
         for image in input_images or ():
             cmd += ["--input_image", os.path.abspath(image)]
         self._tail = self._log = b""

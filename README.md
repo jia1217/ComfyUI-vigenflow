@@ -3,8 +3,8 @@
 Text-to-image and image editing on the **AMD Ryzen AI NPU** in ComfyUI, with the
 [VigenFlow](https://github.com/jia1217/vigenflow) engine: FLUX.2 Klein 4B, FLUX.1 Schnell, Krea 2 Turbo,
 Qwen-Image 2.1 Turbo and Z-Image Turbo, and the edit models FLUX.2 Klein 4B Edit (1–4 reference images)
-and Qwen-Image 2.1 Turbo Edit (1–10). Everything runs on the NPU: about 8 s per 1024×1024 FLUX.2
-image, 17 s per FLUX.2 edit, 55 s per two-image Qwen-Image edit.
+and Qwen-Image 2.1 Turbo Edit (1–10), and the SeedVR2 3B upscaler. Everything runs on the NPU: about 8 s per 1024×1024 FLUX.2
+image, 17 s per FLUX.2 edit, 55 s per two-image Qwen-Image edit, 23 s per 2048 × 2048 upscale.
 
 ## Quick Start
 
@@ -21,7 +21,7 @@ image, 17 s per FLUX.2 edit, 55 s per two-image Qwen-Image edit.
 
 3. Open **Templates → Extensions → ComfyUI-vigenflow** and choose **vigenflow_text_to_image**
    or **vigenflow_image_edit** (it edits ComfyUI's `input/example.png`; add a Load Image node to
-   Edit Prompt's `image_2` for a second reference)
+   Edit Prompt's `image_2` for a second reference) or **vigenflow_upscale**
    (or drag [`example_workflows/vigenflow_text_to_image.json`](example_workflows/vigenflow_text_to_image.json)
    onto the canvas), pick a model and click **Run**. The first image of each model downloads its
    weights into `ComfyUI/models/vigenflow/<model>/` (8–27 GB; progress in the ComfyUI console).
@@ -55,6 +55,7 @@ models that do not need it). To accept once for every workflow instead, create
 | Node | Use |
 |---|---|
 | **VigenFlow: Text to Image (NPU)** | Model, prompt, size, steps, seed and LoRA; returns the image and shows the runtimes |
+| **VigenFlow: Upscale (NPU)** | SeedVR2 3B: an image to a square `upscaling_size` (16–2048); the input is center-cropped to a square first |
 | **VigenFlow: Image Edit (NPU)** | `edit_input` (or `references` / one `image` plus its own prompt box); the same controls |
 | **VigenFlow: Edit Prompt** | The edit prompt and its images in one node: connect a Load Image node (each reference its own node) to `image_1`–`image_4`; one wire to `edit_input`, and `image` (the first) for Compare Images |
 | **VigenFlow: Reference Images** | The edit images in one node: four load-image cells (click or drop an image on a cell; **upload images** takes several files in order), or pick from the `image_1`–`image_4` lists, and/or `images` from other nodes; one wire to `references`, and `image` (the first) for Compare Images |

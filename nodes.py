@@ -231,6 +231,11 @@ def _lora_files(spec):
     return files
 
 
+def _lora_models(host):
+    """Models that take LoRAs (not the upscaler)."""
+    return [m for m in npu_worker.available_models(host) if npu_worker.model_spec(host, m)["kind"] != "upscale"]
+
+
 def model_loras():
     """{model: ["none", the model's LoRA list..., other files in ComfyUI/models/loras/<id>/...]}.
     The list is the engine's LoRAs merged with the user's ComfyUI/models/loras/<id>/loras.jsonc
@@ -243,7 +248,7 @@ def model_loras():
     except Exception as exc:   # noqa: BLE001 - keep the node usable
         print(f"[VigenFlow] {exc}", file=sys.stderr)
     result = {}
-    for model in npu_worker.available_models(host):
+    for model in _lora_models(host):
         spec = npu_worker.model_spec(host, model)
         entries = npu_worker.lora_entries(spec["host_dir"])
         used = {os.path.normpath(e["file"]) for e in entries}
@@ -583,6 +588,87 @@ class VigenFlowImageEdit:
                                  lora_file, unique_id, None, lora_stack, images, input_limit, accept_license)
 
 
+class VigenFlowUpscale:
+    """Image -> square upscaled image with a VigenFlow upscaler (SeedVR2 3B), on the NPU. The input is
+    center-cropped to a square and resized to upscaling_size first, as the VigenFlow server does."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        host = npu_worker.default_host_dir()
+        models = npu_worker.available_models(host, "upscale")
+        return {
+            "required": {
+                "model": (models, {"default": models[0] if models else None,
+                                   "tooltip": "VigenFlow upscalers (models.json); the engine and weights download on first use"}),
+                "image": ("IMAGE", {"tooltip": "The image to upscale (center-cropped to a square)"}),
+                "upscaling_size": ("INT", {"default": 2048, "min": 16, "max": 2048, "step": 16,
+                                           "tooltip": "Side of the square output, a multiple of 16"}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 2**31 - 1}),
+            },
+            "hidden": {"unique_id": "UNIQUE_ID"},
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "upscale"
+    CATEGORY = "NPU"
+
+    def upscale(self, model, image, upscaling_size, seed, unique_id=None):
+        if upscaling_size % 16 or not 16 <= upscaling_size <= 2048:
+            raise ValueError("upscaling_size must be 16-2048 and a multiple of 16")
+        spec = npu_worker.model_spec(npu_worker.default_host_dir(), model)
+
+        def status(text):
+            if PromptServer is not None and unique_id is not None:
+                PromptServer.instance.send_progress_text(f"{model}: {text}", unique_id)
+
+        try:
+            installer.ensure_model(spec, status, _interrupted)
+        except npu_worker.Cancelled:
+            if model_management is not None:
+                model_management.throw_exception_if_processing_interrupted()
+            raise
+        tmp_dir = folder_paths.get_temp_directory() if folder_paths else tempfile.gettempdir()
+        os.makedirs(tmp_dir, exist_ok=True)
+        array = (image[0].clamp(0, 1).cpu().numpy() * 255.0 + 0.5).astype(np.uint8)
+        picture = Image.fromarray(array[..., :3]).convert("RGB")
+        src_w, src_h = picture.size
+        side = min(src_w, src_h)
+        left, top = (src_w - side) // 2, (src_h - side) // 2
+        source = os.path.join(tmp_dir, f"vigenflow_upscale_in_{uuid.uuid4().hex}.png")
+        png = os.path.join(tmp_dir, f"vigenflow_upscale_{uuid.uuid4().hex}.png")
+        picture.crop((left, top, left + side, top + side)).resize((upscaling_size, upscaling_size), Image.LANCZOS).save(source)
+        status("Upscaling on the NPU...")
+        try:
+            w = npu_worker.get_worker(spec, upscaling_size, upscaling_size)
+            try:
+                print(f"[VigenFlow {model}] input {src_w} × {src_h}" + (" (center-cropped to a square)" if src_w != src_h else ""),
+                      file=sys.stderr, flush=True)
+                reply = w.generate("", seed, png, 1, should_cancel=_interrupted, input_images=[source])
+            except npu_worker.Cancelled:
+                npu_worker.release_worker()
+                if model_management is not None:
+                    model_management.throw_exception_if_processing_interrupted()
+                raise
+            ram_peak = w.memory_gb()[1]
+            with Image.open(png) as im:
+                pixels = np.asarray(im.convert("RGB"), dtype=np.float32) / 255.0
+        finally:
+            for path in (source, png):
+                if os.path.exists(path):
+                    os.remove(path)
+            npu_worker.release_worker()
+        summary = (f"Input {src_w} × {src_h}" + (" → center-cropped to a square" if src_w != src_h else "") + "\n"
+                   f"Output size {upscaling_size} × {upscaling_size}\n"
+                   f"VAE encoder runtime {reply.get('conditioning_seconds', 0.0):.2f} s\n"
+                   f"Denoising runtime {reply.get('denoising_seconds', 0.0):.2f} s\n"
+                   f"VAE decoder runtime {reply.get('vae_decoder_seconds', 0.0):.2f} s\n"
+                   f"E2E runtime {reply.get('e2e_seconds', 0.0):.2f} s")
+        print(f"[VigenFlow {model}] {upscaling_size}x{upscaling_size} seed {seed}; E2E {reply.get('e2e_seconds', 0.0):.2f} s; "
+              f"request {reply.get('request_seconds', 0.0):.2f} s; NPU worker RAM peak {ram_peak:.2f} GB", flush=True)
+        return {"ui": {"text": [summary]}, "result": (torch.from_numpy(pixels).unsqueeze(0),)}
+
+
 class VigenFlowPrompt:
     """A prompt in its own node. Connect it to the generator's prompt_text input; one Prompt node
     can feed several generators."""
@@ -609,7 +695,7 @@ class VigenFlowLoadLora:
     @classmethod
     def INPUT_TYPES(cls):
         host = npu_worker.default_host_dir()
-        models = npu_worker.available_models(host)
+        models = _lora_models(host)
         names = []
         for model_names in model_loras().values():   # the browser shows the chosen model's part
             names += [name for name in model_names if name not in names]
@@ -877,6 +963,7 @@ except Exception as exc:   # noqa: BLE001 - never stop ComfyUI from starting
 NODE_CLASS_MAPPINGS = {
     "VigenFlowTextToImage": VigenFlowTextToImage,
     "VigenFlowImageEdit": VigenFlowImageEdit,
+    "VigenFlowUpscale": VigenFlowUpscale,
     "VigenFlowPrompt": VigenFlowPrompt,
     "VigenFlowLoadLora": VigenFlowLoadLora,
     "VigenFlowImageSize": VigenFlowImageSize,
@@ -889,6 +976,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "VigenFlowTextToImage": "VigenFlow: Text to Image (NPU)",
     "VigenFlowImageEdit": "VigenFlow: Image Edit (NPU)",
+    "VigenFlowUpscale": "VigenFlow: Upscale (NPU)",
     "VigenFlowPrompt": "VigenFlow: Prompt",
     "VigenFlowLoadLora": "VigenFlow: Load LoRA",
     "VigenFlowImageSize": "VigenFlow: Image Size",

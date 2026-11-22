@@ -3,7 +3,7 @@ import { api } from "../../scripts/api.js";
 
 const widgetName = "vigenflow_denoising_runtime";
 const lineHeight = 20;   // runtime lines; the box grows with their number (4 or 5)
-const generatorNodes = new Set(["VigenFlowTextToImage", "VigenFlowImageEdit", "Flux2KleinNPU"]);
+const generatorNodes = new Set(["VigenFlowTextToImage", "VigenFlowImageEdit", "VigenFlowUpscale", "Flux2KleinNPU"]);
 const sizeNodes = new Set([...generatorNodes, "VigenFlowImageSize", "VigenFlowEditSize"]);
 const CUSTOM = "Custom";
 const INPUT_IMAGE = "Input image";   // removed edit size choice; saved edit nodes are converted

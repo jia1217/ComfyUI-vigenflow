@@ -81,6 +81,17 @@
         "url": "https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo"
       },
       "worker": false
+    },
+    "SeedVR2 3B": {
+      "id": "seedvr2_3B",
+      "kind": "upscale",
+      "weights_id": "seedvr2",
+      "npu_files": "all_npu_files/seedvr2_3B",
+      "worker": false,
+      "steps": 1,
+      "allowed_steps": [
+        1
+      ]
     }
   }
 }
