@@ -416,7 +416,7 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
         f"E2E runtime {e2e_s:.2f} s"
     )
     return {
-        "ui": {"text": [runtime_summary]},
+        "ui": {"text": [runtime_summary], **({"vigenflow_refs": [f"Sent to {model}:"] + ref_lines} if refs else {})},
         "result": (torch.from_numpy(pixels).unsqueeze(0),),
     }
 

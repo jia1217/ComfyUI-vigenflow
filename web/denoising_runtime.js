@@ -205,6 +205,40 @@ function migrateOldValues(node, info) {
     }
 }
 
+// After an edit, the sizes sent for each reference are also shown on the node that supplied the
+// images (Edit Prompt or Reference Images), drawn on the canvas under its inputs.
+function showSentSizes(editNode, lines) {
+    for (const name of ["edit_input", "references"]) {
+        const slot = editNode.findInputSlot(name);
+        const link = slot >= 0 ? editNode.graph?.links[editNode.inputs[slot].link] : null;
+        const source = link ? editNode.graph.getNodeById(link.origin_id) : null;
+        if (!source || !["VigenFlowEditPrompt", "VigenFlowReferenceImages"].includes(source.type)) continue;
+        let note = findWidget(source, "vigenflow_sent_sizes");
+        if (!note) {
+            note = source.addCustomWidget({
+                name: "vigenflow_sent_sizes", type: "vigenflow_note", value: "", lines: [], serialize: false,
+                computeSize(width) { return [width, this.lines.length * 16 + 8]; },
+                draw(ctx, _node, width, y) {
+                    ctx.save();
+                    ctx.font = "12px sans-serif";
+                    ctx.textBaseline = "top";
+                    this.lines.forEach((line, i) => {
+                        ctx.fillStyle = i === 0 ? "#bbbbbb" : line.includes("resized") ? "#e0b050" : "#9a9a9a";
+                        let text = line;
+                        while (text.length > 4 && ctx.measureText(text).width > width - 24) text = text.slice(0, -2);
+                        ctx.fillText(text === line ? text : text + "…", 12, y + 4 + i * 16);
+                    });
+                    ctx.restore();
+                },
+            });
+            note.serialize = false;
+        }
+        note.lines = lines;
+        source.setSize([source.size[0], Math.max(source.size[1], source.computeSize()[1])]);
+        source.setDirtyCanvas(true, true);
+    }
+}
+
 // accept_license only matters for models whose weights have their own license: greyed out otherwise.
 let modelLicenses = null;
 
@@ -572,6 +606,7 @@ app.registerExtension({
         const onExecuted = nodeType.prototype.onExecuted;
         nodeType.prototype.onExecuted = function (output) {
             onExecuted?.call(this, output);
+            if (output?.vigenflow_refs) showSentSizes(this, output.vigenflow_refs);
             const summary = output?.text?.[0];
             if (typeof summary !== "string") return;
 
