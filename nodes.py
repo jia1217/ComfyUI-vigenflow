@@ -364,9 +364,9 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
         print(f"[VigenFlow {model}] LoRA trigger words, {note}", flush=True)
     reference_s = reply.get("conditioning_seconds", 0.0)
     runtime_summary = (
-        (f"Reference encoder runtime {reference_s:.2f} s ({len(refs)} image{'s' * (len(refs) > 1)}, "
-         f"{ref_tokens} tokens)\n"
-         if refs else "") +
+        (f"References {len(refs)} image{'s' * (len(refs) > 1)}, {ref_tokens} tokens\n"
+         f"Reference encoder runtime {reference_s:.2f} s\n"
+         f"Output size {width} × {height}\n" if refs else "") +
         f"Text encoder runtime {text_s:.2f} s\n"
         f"Denoising runtime {denoise_s:.2f} s\n"
         f"VAE decoder runtime {vae_s:.2f} s\n"

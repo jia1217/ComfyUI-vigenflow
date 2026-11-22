@@ -62,21 +62,23 @@ function updateSizeWidgets(node) {
     const keep = findWidget(node, "keep_ratio");
     const match = findWidget(node, "match_input");
     const fromImage = match?.value === true;
-    if (keep) keep.hidden = fromSizeNode || fromImage;
+    // match_input greys out the size controls (as the VigenFlow Studio does) instead of hiding them.
+    if (keep) Object.assign(keep, { hidden: fromSizeNode, disabled: fromImage });
     if (match) match.hidden = fromSizeNode;
-    if (ratio) ratio.hidden = fromLatent || fromInputs || fromSizeNode || fromImage;
+    if (ratio) Object.assign(ratio, { hidden: fromLatent || fromInputs || fromSizeNode, disabled: fromImage });
     if (size) {
         if (!custom) {
             const labels = sizesFor(size, ratio.value);
             size.options.values = labels;
             if (!labels.includes(size.value)) size.value = closestToOneMegapixel(labels);
         }
-        size.hidden = fromLatent || fromSizeNode || custom || fromImage;
+        Object.assign(size, { hidden: fromLatent || fromSizeNode || custom, disabled: fromImage });
     }
     for (const name of ["width", "height"]) {
         const widget = findWidget(node, name);
-        if (widget) widget.hidden = fromLatent || fromSizeNode || fromImage || !custom;
+        if (widget) Object.assign(widget, { hidden: fromLatent || fromSizeNode || !custom, disabled: fromImage });
     }
+    if (match) updateSizeNote(node, fromSizeNode, fromImage, keep?.value, custom);
     const [width] = node.size;
     node.setSize([width, node.computeSize()[1]]);
     node.setDirtyCanvas(true, true);
@@ -101,6 +103,34 @@ function updateLoraWidgets(node) {
     const [width] = node.size;
     node.setSize([width, node.computeSize()[1]]);
     node.setDirtyCanvas(true, true);
+}
+
+// Edit size nodes: one line saying what the output size will be (it depends on the first image),
+// drawn on the canvas like ComfyUI's own widgets.
+function updateSizeNote(node, hidden, fromImage, keepRatio, custom) {
+    let note = findWidget(node, "vigenflow_size_note");
+    if (!note) {
+        note = node.addCustomWidget({
+            name: "vigenflow_size_note", type: "vigenflow_note", value: "", text: "", serialize: false,
+            computeSize: (width) => [width, 20],
+            draw(ctx, _node, width, y, height) {
+                ctx.save();
+                ctx.fillStyle = "#9a9a9a";
+                ctx.font = "12px sans-serif";
+                ctx.textBaseline = "middle";
+                let text = this.text;
+                while (text.length > 4 && ctx.measureText(text).width > width - 30) text = text.slice(0, -2);
+                ctx.fillText(text === this.text ? text : text + "…", 15, y + height / 2);
+                ctx.restore();
+            },
+        });
+        note.serialize = false;
+    }
+    const box = custom ? `${findWidget(node, "width")?.value} × ${findWidget(node, "height")?.value}`
+                       : String(findWidget(node, "size")?.value);
+    note.text = fromImage ? "Output: the first image's own size (up to 2048)"
+        : keepRatio ? `Output: first image's shape inside ${box}` : `Output: ${box}`;
+    note.hidden = hidden;
 }
 
 // Saved graphs keep widget values by position. Generator nodes are tagged with LAYOUT; an
@@ -460,7 +490,7 @@ app.registerExtension({
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function (...args) {
             const result = onNodeCreated?.apply(this, args);
-            for (const name of ["aspect_ratio", "match_input"]) {
+            for (const name of ["aspect_ratio", "match_input", "keep_ratio", "size", "width", "height"]) {
                 const widget = findWidget(this, name);
                 if (!widget) continue;
                 const callback = widget.callback;
