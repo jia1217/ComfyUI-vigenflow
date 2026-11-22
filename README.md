@@ -36,6 +36,15 @@ It stops if another copy of the VigenFlow nodes is installed in the same ComfyUI
 AMD XRT with the NPU driver, and Boost.ProgramOptions 1.83
 (`sudo apt install libboost-program-options1.83.0`). The node checks these and says what is missing.
 
+**Windows:** Windows 11 on a Ryzen AI processor with an XDNA 2 NPU and the AMD NPU driver
+("NPU Compute Accelerator Device" in Device Manager). The node installs the Windows release
+(`vgf_0.2.0-beta.5_windows_amd64.zip`, which ships its own DLLs) instead of the Ubuntu one. Start
+ComfyUI with `start_windows.bat` (same behaviour and arguments as `start.sh`; it also switches the
+console to UTF-8 for the progress bars and finds a `.venv`, `venv` or the portable build's
+`python_embeded`). The Windows run.exe has no worker mode, so every model loads for each image
+(15–55 s on top of the times above). To reuse weights you already have (for example the VigenFlow
+package's `all_model_weights`), set `weights_dir` in `vigenflow_settings.json`.
+
 ## Model licenses
 
 Krea 2 Turbo (Krea 2 Community License) and Qwen-Image 2.1 Turbo (Qwen Research License,

@@ -11,7 +11,6 @@ import atexit
 import json
 import os
 import re
-import select
 import subprocess
 import sys
 import tempfile
@@ -27,6 +26,10 @@ class WorkerError(RuntimeError):
 class Cancelled(Exception):
     pass
 
+
+IS_WINDOWS = os.name == "nt"
+if not IS_WINDOWS:
+    import select   # worker mode only; the Windows run.exe has no worker mode (one run per image)
 
 NODE_DIR = os.path.dirname(os.path.realpath(__file__))
 SETTINGS_FILE = "vigenflow_settings.json"   # optional, next to this file; not in git
@@ -96,8 +99,9 @@ def load_settings(host_dir=NODE_DIR):
     builtin_file = os.path.join(host_dir, "models.json")
     user_file = os.path.join(host_dir, SETTINGS_FILE)
     builtin, user = _read_json(builtin_file, True), _read_json(user_file, False)
+    platform_part = builtin.get("windows", {}) if IS_WINDOWS else {}   # the Windows release and its differences
 
-    engine = dict(builtin["engine"])
+    engine = dict(platform_part.get("engine") or builtin["engine"])
     engine["dir"] = (_path(host_dir, user.get("engine_dir"), "engine_dir", user_file)
                      or os.path.join(host_dir, "engine", engine["version"]))
     weights_dir = (_path(host_dir, user.get("weights_dir"), "weights_dir", user_file)
@@ -107,6 +111,9 @@ def load_settings(host_dir=NODE_DIR):
         raise WorkerError(f"accept_licenses in {user_file} must be a list of model ids")
 
     entries = {name: dict(entry) for name, entry in builtin["models"].items()}
+    for name, override in platform_part.get("models", {}).items():
+        if name in entries:
+            entries[name].update(override)
     user_models = user.get("models", {})
     if not isinstance(user_models, dict):
         raise WorkerError(f"models in {user_file} must be an object of model name -> settings")
@@ -126,7 +133,7 @@ def load_settings(host_dir=NODE_DIR):
             npu = _path(host_dir, entry.get("npu_files_path"), f"models.{name}.npu_files_path", filename)
         elif model_id:                # a model of the engine release
             host = os.path.join(engine["dir"], "exe_models", model_id)
-            npu = os.path.join(engine["dir"], entry["npu_files"]) if entry.get("npu_files") else None
+            npu = os.path.normpath(os.path.join(engine["dir"], entry["npu_files"])) if entry.get("npu_files") else None
         else:
             raise WorkerError(f"models.{name} in {filename} needs an id (engine model) or a host_dir")
         weights = _path(host_dir, entry.get("weights_path"), f"models.{name}.weights_path", filename)
@@ -393,6 +400,12 @@ class NPUWorker:
         now, peak = 0.0, self._peak
         if self.proc is None:
             return now, peak
+        if IS_WINDOWS:   # working set of the process (its handle stays valid after it exits)
+            counters = _windows_memory(self.proc)
+            if counters:
+                now = counters[0] / 1e9 if self.proc.poll() is None else 0.0
+                peak = max(peak, counters[1] / 1e9)
+            return now, peak
         try:
             with open(f"/proc/{self.proc.pid}/status") as f:
                 for line in f:
@@ -510,6 +523,34 @@ class NPUWorker:
             except (OSError, subprocess.TimeoutExpired):
                 self.proc.kill()
                 self.proc.wait()
+
+
+def _windows_memory(proc):
+    """(working set, peak working set) in bytes of a Popen process on Windows, or None."""
+    import ctypes
+    from ctypes import wintypes
+
+    class Counters(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
+
+    handle = getattr(proc, "_handle", None)
+    if handle is None:
+        return None
+    counters = Counters()
+    counters.cb = ctypes.sizeof(Counters)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    try:
+        if not psapi.GetProcessMemoryInfo(int(handle), ctypes.byref(counters), counters.cb):
+            return None
+    except (OSError, ValueError):
+        return None
+    return counters.WorkingSetSize, counters.PeakWorkingSetSize
 
 
 Flux2Worker = NPUWorker   # older name
