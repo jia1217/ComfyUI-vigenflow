@@ -5,6 +5,24 @@
     "sha256": "f7dba7d2cc2704aceda4562a01c2a90705c46f079b05ddc49e0ede3e32d45648",
     "archive_root": "vgf_0.2.0-beta.5_ubuntu_amd64"
   },
+  "windows": {
+    "engine": {
+      "version": "0.2.0-beta.5",
+      "url": "https://github.com/jia1217/vigenflow/releases/download/v0.2.0-beta.5/vgf_0.2.0-beta.5_windows_amd64.zip",
+      "sha256": "9aa5cb97e075eef29e10f70dbaef56b5a10a246b6ea5a605f50f43bf79fbd087",
+      "archive_root": "vgf_0.2.0-beta.5_windows_amd64"
+    },
+    "models": {
+      "FLUX.2 Klein 4B": { "worker": false },
+      "FLUX.1 Schnell": { "worker": false },
+      "Krea 2 Turbo": { "worker": false },
+      "Qwen-Image 2.1 Turbo": { "worker": false, "npu_files": "all_npu_files/qwen_image_21/base" },
+      "Z-Image Turbo": { "worker": false },
+      "FLUX.2 Klein 4B Edit": { "worker": false },
+      "Qwen-Image 2.1 Turbo Edit": { "worker": false, "npu_files": "all_npu_files/qwen_image_21/edit" },
+      "SeedVR2 3B": { "worker": false }
+    }
+  },
   "models": {
     "FLUX.2 Klein 4B": {
       "id": "flux2_klein_4B",

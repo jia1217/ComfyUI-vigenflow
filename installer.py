@@ -11,7 +11,6 @@
 No ComfyUI imports here. Set VIGENFLOW_ENGINE_ZIP to a local copy of the release zip to install
 without downloading it (the SHA256 is still checked).
 """
-import fcntl
 import hashlib
 import json
 import os
@@ -31,6 +30,12 @@ try:
 except ImportError:   # run as a plain module (install.py)
     import worker as npu_worker
 
+IS_WINDOWS = npu_worker.IS_WINDOWS
+if IS_WINDOWS:
+    import msvcrt
+else:
+    import fcntl
+
 LORA_PREFIX = "../../../../all_model_weights/"   # LoRA paths in the release's loras.jsonc
 COMPLETE = ".complete"                            # written last: the engine folder is whole
 
@@ -49,7 +54,21 @@ def _say(status, text):
 def _lock(folder):
     """One installer at a time (ComfyUI, install.py and a second ComfyUI may overlap)."""
     os.makedirs(folder, exist_ok=True)
-    with open(os.path.join(folder, ".lock"), "w") as handle:
+    with open(os.path.join(folder, ".lock"), "a+") as handle:
+        if IS_WINDOWS:   # lock the first byte; wait as long as the other installer runs
+            handle.seek(0)
+            while True:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    time.sleep(0.5)
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:
             yield
@@ -62,6 +81,13 @@ def _lock(folder):
 def check_system():
     """Problems that stop the engine from running on this machine (empty when it can run)."""
     problems = []
+    if IS_WINDOWS:
+        if platform.machine() not in ("x86_64", "AMD64"):
+            problems.append(f"VigenFlow for ComfyUI needs x86-64 (this is Windows {platform.machine()})")
+        if not _windows_npu_present():
+            problems.append("No AMD NPU found (no \"NPU Compute Accelerator Device\" in Device Manager). "
+                            "It needs a Ryzen AI processor with an XDNA 2 NPU and the AMD NPU driver")
+        return problems
     if platform.system() != "Linux" or platform.machine() not in ("x86_64", "AMD64"):
         problems.append(f"VigenFlow for ComfyUI needs Linux on x86-64 (this is {platform.system()} "
                         f"{platform.machine()})")
@@ -71,8 +97,17 @@ def check_system():
     return problems
 
 
+def _windows_npu_present():
+    """The AMD NPU driver's files: xrt-smi.exe and its helpers in System32\\AMD (installed with the driver)."""
+    system = os.environ.get("SystemRoot", r"C:\Windows")
+    return os.path.isfile(os.path.join(system, "System32", "AMD", "xrt-smi.exe"))
+
+
 def missing_libraries(exe):
-    """Shared libraries run.exe needs but the system lacks, with install hints."""
+    """Shared libraries run.exe needs but the system lacks, with install hints. On Windows the
+    release ships its DLLs beside each run.exe (lib/), so there is nothing to check."""
+    if IS_WINDOWS:
+        return []
     try:
         out = subprocess.run(["ldd", exe], capture_output=True, text=True, timeout=30).stdout
     except (OSError, subprocess.SubprocessError):
@@ -99,7 +134,7 @@ def _engine_parts(settings):
         if spec["engine"]:
             parts.append(f"{root}/server_running/exe_models/{spec['id']}/")
             if spec["npu_files_path"]:
-                rel = os.path.relpath(spec["npu_files_path"], settings["engine"]["dir"])
+                rel = os.path.relpath(spec["npu_files_path"], settings["engine"]["dir"]).replace(os.sep, "/")
                 parts.append(f"{root}/{rel}/")
     return parts
 
