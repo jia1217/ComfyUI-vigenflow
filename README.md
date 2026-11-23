@@ -6,14 +6,14 @@ Everything runs on the NPU.
 
 | Model | Kind | Default steps | Ubuntu | Windows |
 |---|---|---:|---:|---:|
-| FLUX.2 Klein 4B | Text to image | 4 | 8.0 s | 8.7 s |
-| FLUX.1 Schnell | Text to image | 4 | 20.1 s | 21.8 s |
-| Krea 2 Turbo | Text to image | 8 | 44.4 s | 46.9 s |
-| Qwen-Image 2.1 Turbo | Text to image | 8 | 32.1 s | 31.5 s |
-| Z-Image Turbo | Text to image | 8 (or 4) | 18.1 s at 4 steps | 19.4 s at 4 steps |
-| FLUX.2 Klein 4B Edit | Image edit, 1–4 references | 4 | 17.0 s | 16.2 s |
-| Qwen-Image 2.1 Turbo Edit | Image edit, 1–10 references | 8 | 44.9 s | 41.3 s |
-| SeedVR2 3B | Upscale to a square, up to 2048 | 1 | 5.5 s | 5.7 s |
+| FLUX.2 Klein 4B | Text to image | 4 | 8 s | 8 s |
+| FLUX.1 Schnell | Text to image | 4 | 20 s | 20 s |
+| Krea 2 Turbo | Text to image | 8 | 44 s | 44 s |
+| Qwen-Image 2.1 Turbo | Text to image | 8 | 31 s | 31 s |
+| Z-Image Turbo | Text to image | 8 (or 4) | 18 s at 4 steps | 18 s at 4 steps |
+| FLUX.2 Klein 4B Edit | Image edit, 1–4 references | 4 | 17.0 s | 17 s |
+| Qwen-Image 2.1 Turbo Edit | Image edit, 1–10 references | 8 | 44 s | 44 s |
+| SeedVR2 3B | Upscale to a square, up to 2048 | 1 | 5.5 s | 5.5 s |
 
 Times are NPU time (E2E) for one 1024 × 1024 image, edits with one reference. Prompts and
 reference images differ between the two columns, so compare them only roughly. Loading the model
