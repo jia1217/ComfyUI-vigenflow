@@ -4,21 +4,27 @@ Text-to-image, image editing and upscaling on the **AMD Ryzen AI NPU** in ComfyU
 **Ubuntu and Windows**, with the [VigenFlow](https://github.com/jia1217/vigenflow) engine.
 Everything runs on the NPU.
 
-| Model | Kind | Default steps | Ubuntu | Windows |
-|---|---|---:|---:|---:|
-| FLUX.2 Klein 4B | Text to image | 4 | 8 s | 8 s |
-| FLUX.1 Schnell | Text to image | 4 | 20 s | 20 s |
-| Krea 2 Turbo | Text to image | 8 | 44 s | 44 s |
-| Qwen-Image 2.1 Turbo | Text to image | 8 | 31 s | 31 s |
-| Z-Image Turbo | Text to image | 8 (or 4) | 18 s at 4 steps | 18 s at 4 steps |
-| FLUX.2 Klein 4B Edit | Image edit, 1–4 references | 4 | 17.0 s | 17 s |
-| Qwen-Image 2.1 Turbo Edit | Image edit, 1–10 references | 8 | 44 s | 44 s |
-| SeedVR2 3B | Upscale to a square, up to 2048 | 1 | 5.5 s | 5.5 s |
+### 🖼️ Text-to-Image
 
-Times are NPU time (E2E) for one 1024 × 1024 image, edits with one reference. Prompts and
-reference images differ between the two columns, so compare them only roughly. Loading the model
-comes on top, see [Behaviour](#behaviour). Larger jobs take longer: about 55 s for a two-image
-Qwen-Image edit and 23 s for a 2048 × 2048 upscale on Ubuntu.
+| Model | Model ID | Denoising steps | Time per image | Windows | Ubuntu |
+| --- | --- | ---: | ---: | :---: | :---: |
+| **FLUX.1-schnell** | `flux1-schnell` | 4 | ~20 s | ✅ | ✅ |
+| **FLUX.2-klein-4B** | `flux2-klein-4B` | 4 | ~8 s | ✅ | ✅ |
+| **Krea 2 Turbo** | `krea2-turbo` | 8 | ~45 s | ✅ | ✅ |
+| **Z-Image-Turbo** | `z-image-turbo` | 4 or 8 | ~18 s | ✅ | ✅ |
+| **Qwen Image 2.1 Turbo** | `qwen-image-2.1-turbo` | 8 | ~31 s | ✅ | ✅ |
+
+### ✏️ Image-to-Image (Editing and Upscaling)
+
+| Model | Model ID | Denoising steps | Time per image | Windows | Ubuntu |
+| --- | --- | ---: | ---: | :---: | :---: |
+| **FLUX.2-klein-4B Edit** | `flux2-klein-4B-edit` | 4 | ~17 s | ✅ | ✅ |
+| **Qwen Image 2.1 Turbo Edit** | `qwen-image-2.1-turbo-edit` | 8 | ~45 s | ✅ | ✅ |
+| **SeedVR2-3B** (upscaling) | `seedvr2-3B` | 1 | ~5.5 s | ✅ | ✅ |
+
+The times are approximate NPU time for one 1024 × 1024 image (Z-Image-Turbo at 4 steps). Editing
+times are for one reference image; SeedVR2-3B's is for an upscale to 1024 × 1024. Loading the model
+comes on top, see [Behaviour](#behaviour).
 
 ## Requirements
 
