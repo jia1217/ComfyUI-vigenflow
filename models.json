@@ -7,10 +7,10 @@
   },
   "windows": {
     "engine": {
-      "version": "0.2.0-beta.5",
-      "url": "https://github.com/jia1217/vigenflow/releases/download/v0.2.0-beta.5/vgf_0.2.0-beta.5_windows_amd64.zip",
-      "sha256": "9aa5cb97e075eef29e10f70dbaef56b5a10a246b6ea5a605f50f43bf79fbd087",
-      "archive_root": "vgf_0.2.0-beta.5_windows_amd64"
+      "version": "0.2.0-beta.6",
+      "url": "https://github.com/jia1217/vigenflow/releases/download/v0.2.0-beta.6/vgf_0.2.0-beta.6_windows_amd64.zip",
+      "sha256": "ca7ebe67007f0b2d1f1996b9af6a2d7282ee79129d5fe33d543844c083c1f3d7",
+      "archive_root": "vgf_0.2.0-beta.6_windows_amd64"
     },
     "models": {
       "FLUX.2 Klein 4B": { "worker": false },
@@ -20,9 +20,7 @@
       "Z-Image Turbo": { "worker": false },
       "FLUX.2 Klein 4B Edit": { "worker": false },
       "Qwen-Image 2.1 Turbo Edit": { "worker": false, "npu_files": "all_npu_files/qwen_image_21/edit" },
-      "SeedVR2 3B": { "worker": false },
-      "FLUX.3 image klein": { "enabled": false },
-      "FLUX.3 image klein Edit": { "enabled": false }
+      "SeedVR2 3B": { "worker": false }
     }
   },
   "models": {
