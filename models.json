@@ -1,9 +1,9 @@
 {
   "engine": {
-    "version": "0.2.0-beta.5",
-    "url": "https://github.com/jia1217/vigenflow/releases/download/v0.2.0-beta.5/vgf_0.2.0-beta.5_ubuntu_amd64.zip",
-    "sha256": "f7dba7d2cc2704aceda4562a01c2a90705c46f079b05ddc49e0ede3e32d45648",
-    "archive_root": "vgf_0.2.0-beta.5_ubuntu_amd64"
+    "version": "0.2.0-beta.6",
+    "url": "https://github.com/jia1217/vigenflow/releases/download/v0.2.0-beta.6/vgf_0.2.0-beta.6_ubuntu_amd64.zip",
+    "sha256": "e09fb1035499b13a73498243447e51de37ba0c14dd42185ce4119de1af68cd4d",
+    "archive_root": "vgf_0.2.0-beta.6_ubuntu_amd64"
   },
   "windows": {
     "engine": {
@@ -20,7 +20,9 @@
       "Z-Image Turbo": { "worker": false },
       "FLUX.2 Klein 4B Edit": { "worker": false },
       "Qwen-Image 2.1 Turbo Edit": { "worker": false, "npu_files": "all_npu_files/qwen_image_21/edit" },
-      "SeedVR2 3B": { "worker": false }
+      "SeedVR2 3B": { "worker": false },
+      "FLUX.3 image klein": { "enabled": false },
+      "FLUX.3 image klein Edit": { "enabled": false }
     }
   },
   "models": {
@@ -71,6 +73,21 @@
         8
       ]
     },
+    "FLUX.3 image klein": {
+      "id": "flux3_image_klein",
+      "npu_files": "all_npu_files/flux3_image_klein/base",
+      "steps": 16,
+      "allowed_steps": [
+        16
+      ],
+      "min_size": 64,
+      "lora": false,
+      "worker": false,
+      "license": {
+        "name": "FLUX Kommunity License (non-commercial; outputs commercially only below USD 5 million annual revenue)",
+        "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein"
+      }
+    },
     "FLUX.2 Klein 4B Edit": {
       "id": "flux2_klein_4B_edit",
       "kind": "edit",
@@ -99,6 +116,28 @@
         "url": "https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo"
       },
       "worker": false
+    },
+    "FLUX.3 image klein Edit": {
+      "id": "flux3_image_klein_edit",
+      "kind": "edit",
+      "weights_id": "flux3_image_klein",
+      "npu_files": "all_npu_files/flux3_image_klein/base",
+      "extra_npu_files": [
+        "all_npu_files/flux3_image_klein/edit"
+      ],
+      "max_images": 10,
+      "reference_preparation": "flux3",
+      "steps": 16,
+      "allowed_steps": [
+        16
+      ],
+      "min_size": 64,
+      "lora": false,
+      "worker": false,
+      "license": {
+        "name": "FLUX Kommunity License (non-commercial; outputs commercially only below USD 5 million annual revenue)",
+        "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein"
+      }
     },
     "SeedVR2 3B": {
       "id": "seedvr2_3B",

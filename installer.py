@@ -4,8 +4,8 @@
   against its SHA256, of which only the text-to-image workers (exe_models/<id>/), their NPU
   files and the weights downloader (prepare/) are unpacked into engine/<version>/;
 - a model's weights: the release's prepare_base.exe downloads the pre-packed NPU weights from
-  Hugging Face into ComfyUI/models/vigenflow/<id>/ the first time that model is used. Krea 2 and
-  Qwen-Image weights are under their own licenses and download only after the user accepts them
+  Hugging Face into ComfyUI/models/vigenflow/<id>/ the first time that model is used. Krea 2,
+  Qwen-Image and FLUX.3 weights are under their own licenses and download only after the user accepts them
   in vigenflow_settings.json.
 
 No ComfyUI imports here. Set VIGENFLOW_ENGINE_ZIP to a local copy of the release zip to install
@@ -133,8 +133,8 @@ def _engine_parts(settings):
     for spec in settings["models"].values():
         if spec["engine"]:
             parts.append(f"{root}/server_running/exe_models/{spec['id']}/")
-            if spec["npu_files_path"]:
-                rel = os.path.relpath(spec["npu_files_path"], settings["engine"]["dir"]).replace(os.sep, "/")
+            for path in ([spec["npu_files_path"]] if spec["npu_files_path"] else []) + spec["extra_npu_files"]:
+                rel = os.path.relpath(path, settings["engine"]["dir"]).replace(os.sep, "/")
                 parts.append(f"{root}/{rel}/")
     return parts
 
@@ -146,7 +146,8 @@ def engine_ready(settings=None):
     if not os.path.isfile(os.path.join(settings["engine"]["dir"], COMPLETE)):
         return False
     return all(os.path.isfile(os.path.join(spec["host_dir"], "run.exe")) and
-               (not spec["npu_files_path"] or os.path.isdir(spec["npu_files_path"]))
+               (not spec["npu_files_path"] or os.path.isdir(spec["npu_files_path"])) and
+               all(os.path.isdir(path) for path in spec["extra_npu_files"])
                for spec in settings["models"].values() if spec["engine"])
 
 
@@ -195,7 +196,7 @@ def _install_engine(settings, status):
             _say(status, f"Using the VigenFlow engine zip {local}")
             shutil.copyfile(local, archive)
         else:
-            _say(status, f"Downloading the VigenFlow engine {engine['version']} (about 35 MB)")
+            _say(status, f"Downloading the VigenFlow engine {engine['version']} ")
             try:
                 _download(engine["url"], archive, status)
             except OSError as exc:
