@@ -13,7 +13,7 @@ Everything runs on the NPU.
 | **Krea 2 Turbo** | `krea2-turbo` | 8 | ~45 s | ✅ | ✅ |
 | **Z-Image-Turbo** | `z-image-turbo` | 4 or 8 | ~18 s | ✅ | ✅ |
 | **Qwen Image 2.1 Turbo** | `qwen-image-2.1-turbo` | 8 | ~31 s | ✅ | ✅ |
-| **FLUX.3 image klein** (new) | `flux3-image-klein` | 16 | ~31 s | — | ✅ |
+| **FLUX.3 image klein** (new) | `flux3-image-klein` | 16 | ~31 s | ✅ | ✅ |
 
 ### ✏️ Image-to-Image (Editing and Upscaling)
 
@@ -21,7 +21,7 @@ Everything runs on the NPU.
 | --- | --- | ---: | ---: | :---: | :---: |
 | **FLUX.2-klein-4B Edit** | `flux2-klein-4B-edit` | 4 | ~17 s | ✅ | ✅ |
 | **Qwen Image 2.1 Turbo Edit** | `qwen-image-2.1-turbo-edit` | 8 | ~45 s | ✅ | ✅ |
-| **FLUX.3 image klein Edit** (new) | `flux3-image-klein-edit` | 16 | ~75 s | — | ✅ |
+| **FLUX.3 image klein Edit** (new) | `flux3-image-klein-edit` | 16 | ~75 s | ✅ | ✅ |
 | **SeedVR2-3B** (upscaling) | `seedvr2-3B` | 1 | ~5.5 s | ✅ | ✅ |
 
 The times are approximate NPU time for one 1024 × 1024 image (Z-Image-Turbo at 4 steps). Editing
@@ -29,8 +29,7 @@ times are for one reference image; SeedVR2-3B's is for an upscale to 1024 × 102
 comes on top, see [Behaviour](#behaviour).
 
 The two FLUX.3 image klein models come with the VigenFlow
-[Beta 6](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.6) engine and run on Ubuntu
-for now; on Windows the node still uses the Beta 5 engine, which has the other models.
+[Beta 6](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.6) engine, on Ubuntu and Windows.
 
 ## Requirements
 
@@ -40,11 +39,10 @@ for now; on Windows the node still uses the Beta 5 engine, which has the other m
 | Processor | Ryzen AI with an XDNA 2 NPU | Ryzen AI with an XDNA 2 NPU |
 | NPU driver | AMD XRT with the amdxdna driver (`/dev/accel/accel0`) | AMD NPU driver ("NPU Compute Accelerator Device" in Device Manager) |
 | Libraries | Boost.ProgramOptions 1.83: `sudo apt install libboost-program-options1.83.0` | none: the release ships its DLLs |
-| VigenFlow engine | `vgf_0.2.0-beta.6_ubuntu_amd64.zip` (about 45 MB) | `vgf_0.2.0-beta.5_windows_amd64.zip` (about 39 MB) |
+| VigenFlow engine | `vgf_0.2.0-beta.6_ubuntu_amd64.zip` (about 45 MB) | `vgf_0.2.0-beta.6_windows_amd64.zip` (about 48 MB) |
 
 The node picks the engine for your system, downloads it from the VigenFlow release
-([Beta 6](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.6) on Ubuntu,
-[Beta 5](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.5) on Windows) on first use and
+([Beta 6](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.6)) on first use and
 checks its SHA256. It also checks the NPU and libraries and says what is missing. Any ComfyUI
 install works: a git clone with a virtual environment, the Windows portable build or ComfyUI
 Desktop. ComfyUI's own PyTorch nodes can run on the CPU (`--cpu`); the VigenFlow nodes always use the NPU.
@@ -232,8 +230,7 @@ Paths are absolute or relative to this folder. On Windows write them with `/` or
 Restart ComfyUI after changing this file.
 
 **Without internet access**, download the engine zip for your system from the release
-([Beta 6](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.6) for Ubuntu,
-[Beta 5](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.5) for Windows) on another computer and
+([Beta 6](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.6)) on another computer and
 install it from that copy (the SHA256 is still checked):
 
 ```bash
@@ -241,7 +238,7 @@ VIGENFLOW_ENGINE_ZIP=/path/to/vgf_0.2.0-beta.6_ubuntu_amd64.zip python install.p
 ```
 
 ```powershell
-$env:VIGENFLOW_ENGINE_ZIP = "C:\Downloads\vgf_0.2.0-beta.5_windows_amd64.zip"; python install.py
+$env:VIGENFLOW_ENGINE_ZIP = "C:\Downloads\vgf_0.2.0-beta.6_windows_amd64.zip"; python install.py
 ```
 
 ## Test without ComfyUI
