@@ -1,12 +1,24 @@
 # ComfyUI-vigenflow
 
-Text-to-image and image editing on the **AMD Ryzen AI NPU** in ComfyUI, with the
-[VigenFlow](https://github.com/jia1217/vigenflow) engine: FLUX.2 Klein 4B, FLUX.1 Schnell, Krea 2 Turbo,
-Qwen-Image 2.1 Turbo and Z-Image Turbo, and the edit models FLUX.2 Klein 4B Edit (1–4 reference images)
-and Qwen-Image 2.1 Turbo Edit (1–10), and the SeedVR2 3B upscaler, on **Ubuntu and Windows**.
-Everything runs on the NPU: about 8 s per 1024×1024 FLUX.2 image, 17 s per FLUX.2 edit, 55 s per
-two-image Qwen-Image edit, 23 s per 2048 × 2048 upscale (NPU time; loading the model comes on top,
-see [Behaviour](#behaviour)).
+Text-to-image, image editing and upscaling on the **AMD Ryzen AI NPU** in ComfyUI, on
+**Ubuntu and Windows**, with the [VigenFlow](https://github.com/jia1217/vigenflow) engine.
+Everything runs on the NPU.
+
+| Model | Kind | Default steps | Ubuntu | Windows |
+|---|---|---:|---:|---:|
+| FLUX.2 Klein 4B | Text to image | 4 | 8.0 s | 8.7 s |
+| FLUX.1 Schnell | Text to image | 4 | 20.1 s | 21.8 s |
+| Krea 2 Turbo | Text to image | 8 | 44.4 s | 46.9 s |
+| Qwen-Image 2.1 Turbo | Text to image | 8 | 32.1 s | 31.5 s |
+| Z-Image Turbo | Text to image | 8 (or 4) | 18.1 s at 4 steps | 19.4 s at 4 steps |
+| FLUX.2 Klein 4B Edit | Image edit, 1–4 references | 4 | 17.0 s | 16.2 s |
+| Qwen-Image 2.1 Turbo Edit | Image edit, 1–10 references | 8 | 44.9 s | 41.3 s |
+| SeedVR2 3B | Upscale to a square, up to 2048 | 1 | 5.5 s | 5.7 s |
+
+Times are NPU time (E2E) for one 1024 × 1024 image, edits with one reference. Prompts and
+reference images differ between the two columns, so compare them only roughly. Loading the model
+comes on top, see [Behaviour](#behaviour). Larger jobs take longer: about 55 s for a two-image
+Qwen-Image edit and 23 s for a 2048 × 2048 upscale on Ubuntu.
 
 ## Requirements
 
