@@ -3,47 +3,74 @@
 Text-to-image and image editing on the **AMD Ryzen AI NPU** in ComfyUI, with the
 [VigenFlow](https://github.com/jia1217/vigenflow) engine: FLUX.2 Klein 4B, FLUX.1 Schnell, Krea 2 Turbo,
 Qwen-Image 2.1 Turbo and Z-Image Turbo, and the edit models FLUX.2 Klein 4B Edit (1–4 reference images)
-and Qwen-Image 2.1 Turbo Edit (1–10), and the SeedVR2 3B upscaler. Everything runs on the NPU: about 8 s per 1024×1024 FLUX.2
-image, 17 s per FLUX.2 edit, 55 s per two-image Qwen-Image edit, 23 s per 2048 × 2048 upscale.
+and Qwen-Image 2.1 Turbo Edit (1–10), and the SeedVR2 3B upscaler, on **Ubuntu and Windows**.
+Everything runs on the NPU: about 8 s per 1024×1024 FLUX.2 image, 17 s per FLUX.2 edit, 55 s per
+two-image Qwen-Image edit, 23 s per 2048 × 2048 upscale (NPU time; loading the model comes on top,
+see [Behaviour](#behaviour)).
+
+## Requirements
+
+| | Ubuntu | Windows |
+|---|---|---|
+| System | Ubuntu 24.04 (x86-64) | Windows 11 (x86-64) |
+| Processor | Ryzen AI with an XDNA 2 NPU | Ryzen AI with an XDNA 2 NPU |
+| NPU driver | AMD XRT with the amdxdna driver (`/dev/accel/accel0`) | AMD NPU driver ("NPU Compute Accelerator Device" in Device Manager) |
+| Libraries | Boost.ProgramOptions 1.83: `sudo apt install libboost-program-options1.83.0` | none: the release ships its DLLs |
+| VigenFlow engine | `vgf_0.2.0-beta.5_ubuntu_amd64.zip` (about 35 MB) | `vgf_0.2.0-beta.5_windows_amd64.zip` (about 39 MB) |
+
+The node picks the engine for your system, downloads it from the
+[VigenFlow release](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.5) on first use and
+checks its SHA256. It also checks the NPU and libraries and says what is missing. Any ComfyUI
+install works: a git clone with a virtual environment, the Windows portable build or ComfyUI
+Desktop. ComfyUI's own PyTorch nodes can run on the CPU (`--cpu`); the VigenFlow nodes always use the NPU.
 
 ## Quick Start
 
-1. Clone into your ComfyUI custom nodes folder:
+1. Clone into your ComfyUI custom nodes folder.
+
+   Ubuntu:
 
    ```bash
    cd ComfyUI/custom_nodes
    git clone https://github.com/jia1217/ComfyUI-vigenflow.git
    ```
 
-2. Restart ComfyUI. On first use the node downloads the VigenFlow engine (about 35 MB, checked
-   against its published SHA256) into `ComfyUI-vigenflow/engine/`. ComfyUI-Manager installs it
+   Windows (PowerShell or Command Prompt; for ComfyUI Desktop the folder is
+   `Documents\ComfyUI\custom_nodes`):
+
+   ```bat
+   cd ComfyUI\custom_nodes
+   git clone https://github.com/jia1217/ComfyUI-vigenflow.git
+   ```
+
+2. Start (or restart) ComfyUI, with the start script below or as you usually do. On first use the
+   node downloads the VigenFlow engine into `ComfyUI-vigenflow/engine/`. ComfyUI-Manager installs it
    right away; to do that by hand, run `python install.py` in this folder.
 
-3. Open **Templates → Extensions → ComfyUI-vigenflow** and choose **vigenflow_text_to_image**
-   or **vigenflow_image_edit** (it edits ComfyUI's `input/example.png`; add a Load Image node to
-   Edit Prompt's `image_2` for a second reference) or **vigenflow_upscale**
+3. Open http://127.0.0.1:8188, then **Templates → Extensions → ComfyUI-vigenflow** and choose
+   **vigenflow_text_to_image** or **vigenflow_image_edit** (it edits ComfyUI's `input/example.png`;
+   add a Load Image node to Edit Prompt's `image_2` for a second reference) or **vigenflow_upscale**
    (or drag [`example_workflows/vigenflow_text_to_image.json`](example_workflows/vigenflow_text_to_image.json)
    onto the canvas), pick a model and click **Run**. The first image of each model downloads its
    weights into `ComfyUI/models/vigenflow/<model>/` (8–27 GB; progress in the ComfyUI console).
+   Already have the weights (for example the VigenFlow package's `all_model_weights`)? Set
+   `weights_dir` in [`vigenflow_settings.json`](#settings-vigenflow_settingsjson-optional) first.
 
-**Start script:** `./start.sh` starts ComfyUI with these nodes (`--cpu` for ComfyUI's own
-PyTorch nodes; VigenFlow always runs on the NPU). Extra arguments go to ComfyUI, for example
-`./start.sh --port 8190`. Cloned into `ComfyUI/custom_nodes/`, it starts that ComfyUI; cloned
-anywhere else, it links this folder into `$COMFYUI_DIR/custom_nodes/` (default `~/ComfyUI`) first.
-It stops if another copy of the VigenFlow nodes is installed in the same ComfyUI.
+## Start scripts
 
-**Requirements:** Linux on x86-64, a Ryzen AI processor with an XDNA 2 NPU (`/dev/accel/accel0`),
-AMD XRT with the NPU driver, and Boost.ProgramOptions 1.83
-(`sudo apt install libboost-program-options1.83.0`). The node checks these and says what is missing.
+| Ubuntu | Windows |
+|---|---|
+| `./start.sh` | `start_windows.bat` (double-click, or run it in a terminal) |
+| `./start.sh --port 8190` | `start_windows.bat --port 8190` |
 
-**Windows:** Windows 11 on a Ryzen AI processor with an XDNA 2 NPU and the AMD NPU driver
-("NPU Compute Accelerator Device" in Device Manager). The node installs the Windows release
-(`vgf_0.2.0-beta.5_windows_amd64.zip`, which ships its own DLLs) instead of the Ubuntu one. Start
-ComfyUI with `start_windows.bat` (same behaviour and arguments as `start.sh`; it also switches the
-console to UTF-8 for the progress bars and finds a `.venv`, `venv` or the portable build's
-`python_embeded`). The Windows run.exe has no worker mode, so every model loads for each image
-(15–55 s on top of the times above). To reuse weights you already have (for example the VigenFlow
-package's `all_model_weights`), set `weights_dir` in `vigenflow_settings.json`.
+Both start ComfyUI with these nodes and `--cpu`; extra arguments go to ComfyUI's `main.py`.
+Cloned into `ComfyUI/custom_nodes/`, the script starts that ComfyUI; cloned anywhere else, it
+first links this folder into `COMFYUI_DIR/custom_nodes/` (default `~/ComfyUI` on Ubuntu,
+`%USERPROFILE%\ComfyUI` on Windows; a directory junction there). It stops if another copy of the
+VigenFlow nodes is installed in the same ComfyUI. It uses ComfyUI's `.venv` or `venv` (on Windows
+also the portable build's `python_embeded`), else `python3` / `python`; set `COMFYUI_PYTHON` to
+choose another. `start_windows.bat` also switches the console to UTF-8 so the NPU progress bars
+show correctly. With ComfyUI Desktop, restart the app instead.
 
 ## Model licenses
 
@@ -134,12 +161,20 @@ Include a LoRA's trigger words in the prompt (they are printed in the console).
 
 ## Behaviour
 
-- One model runs at a time; the NPU takes one job. Each image starts the model's worker,
-  loads it (15–30 s at 1024 for FLUX.2), generates and releases it, so the NPU and RAM are free
-  between images. Several generator nodes in a graph run one after another.
-- Another NPU job (for example a VigenFlow server) can make the worker fail with
-  `CREATE_HWCTX ... err=-22`; queue the image again when it has finished.
-- Cancel in ComfyUI stops the worker or the download.
+- One model runs at a time; the NPU takes one job. Each image starts the model's run.exe,
+  loads the model, generates and releases it, so the NPU and RAM are free between images.
+  Several generator nodes in a graph run one after another.
+- Loading adds time to every image: 15–30 s at 1024 for FLUX.2 on Ubuntu, 15–55 s depending on
+  the model on Windows. On Ubuntu the node uses run.exe's worker mode; the Windows run.exe has
+  none, so there each image is one ordinary run (the same result).
+- Windows: the first time a model's weights are opened, Microsoft Defender may scan them, which
+  can make that first load take minutes. Later loads are normal.
+- Another NPU job (for example the VigenFlow server or Studio) can make the run fail
+  (`CREATE_HWCTX ... err=-22` on Ubuntu, `0xc01e0009` on Windows); queue the image again when it
+  has finished.
+- Cancel in ComfyUI stops the run or the download.
+- Peak RAM of the model process is printed for each image: about 8 GB for FLUX.2, up to 18 GB
+  for Krea 2.
 
 ## Settings (`vigenflow_settings.json`, optional)
 
@@ -151,15 +186,39 @@ Include a LoRA's trigger words in the prompt (they are printed in the console).
 | `engine_dir` | `ComfyUI-vigenflow/engine/<version>` |
 | `models` | Per-model changes, for example `{"Z-Image Turbo": {"weights_path": "/data/z_image_turbo"}}` |
 
-Paths are absolute or relative to this folder. `VIGENFLOW_ENGINE_ZIP=/path/to/vgf_…_ubuntu_amd64.zip`
-installs the engine from a downloaded copy (for computers without internet access).
+Paths are absolute or relative to this folder. On Windows write them with `/` or doubled `\\`
+(JSON), for example:
+
+```json
+{ "weights_dir": "C:/VigenFlow/all_model_weights" }
+```
+
+Restart ComfyUI after changing this file.
+
+**Without internet access**, download the engine zip for your system from the
+[release](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.5) on another computer and
+install it from that copy (the SHA256 is still checked):
+
+```bash
+VIGENFLOW_ENGINE_ZIP=/path/to/vgf_0.2.0-beta.5_ubuntu_amd64.zip python install.py
+```
+
+```powershell
+$env:VIGENFLOW_ENGINE_ZIP = "C:\Downloads\vgf_0.2.0-beta.5_windows_amd64.zip"; python install.py
+```
 
 ## Test without ComfyUI
+
+In this folder, with ComfyUI's Python (it needs no other packages):
 
 ```bash
 python install.py
 python worker.py --list
+python worker.py --model "FLUX.2 Klein 4B" --prompt "a red fox in the snow" --output fox.png
 ```
+
+`--list` shows each model and its run.exe; the last line generates one image and prints its
+timings and peak RAM.
 
 ## License
 
