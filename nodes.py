@@ -148,7 +148,33 @@ def _reference_plan(sizes, limit, budget):
     return plan_at(lower)
 
 
-def _prepare_references(images, folder, limit="Auto", budget=0):
+def _flux3_prepared(width, height, multi):
+    """The size the FLUX.3 Edit worker itself resizes a reference to before encoding (the official
+    FLUX.3 rule with sides capped at 2048; same as the VigenFlow Studio's flux3Prepared): several
+    references each fitted to 1024 x 1024 pixels and cropped to the 16-pixel grid, one reference
+    fitted to 4 megapixels on a 16-pixel canvas."""
+    max_side, grid = 2048, 16
+    if multi:
+        rw, rh = width, height
+        if width * height > 1024 * 1024:
+            scale = (1024 * 1024 / (width * height)) ** 0.5
+            rw, rh = int(width * scale), int(height * scale)
+        if max(rw, rh) > max_side:
+            scale = max_side / max(rw, rh)
+            rw, rh = int(rw * scale), int(rh * scale)
+        return rw // grid * grid, rh // grid * grid
+    ceil16 = lambda v: -(-v // grid) * grid
+    limit = 4 * 1024 * 1024
+    scale = min(1.0, (limit / (width * height)) ** 0.5, max_side / max(width, height))
+    while True:
+        fw, fh = max(1, round(width * scale)), max(1, round(height * scale))   # round: half to even, as JS
+        cw, ch = min(max_side, max(64, ceil16(fw))), min(max_side, max(64, ceil16(fh)))
+        if fw <= cw and fh <= ch and cw * ch <= limit:
+            return cw, ch
+        scale *= 0.995
+
+
+def _prepare_references(images, folder, limit="Auto", budget=0, preparation=""):
     """ComfyUI IMAGE tensors -> PNG files for the edit worker, sized by _reference_plan (the part
     beyond the multiple of 16 is cropped from the center). Returns (paths, tokens, one line per
     reference: its size and, when changed, the size sent)."""
@@ -161,8 +187,13 @@ def _prepare_references(images, folder, limit="Auto", budget=0):
     for i, (im, ((w, h), (tw, th))) in enumerate(zip(pictures, plan), 1):
         sent = (tw // 16) * (th // 16)
         size = f"{im.size[0]} × {im.size[1]}"
+        used = ""
+        if preparation == "flux3":   # the worker resizes it again: show that size and its tokens
+            uw, uh = _flux3_prepared(tw, th, len(plan) > 1)
+            sent = (uw // 16) * (uh // 16)
+            used = f" → FLUX.3 uses {uw} × {uh}" if (uw, uh) != (tw, th) else ""
         lines.append(f"· image {i}: {size}" + (f" → resized {tw} × {th}" if (tw, th) != im.size else "") +
-                     f" ({sent} tokens)")
+                     f"{used} ({sent} tokens)")
         if (w, h) != im.size:
             im = im.resize((w, h), Image.LANCZOS)
         left, top = (w - tw) // 2, (h - th) // 2
@@ -233,7 +264,7 @@ def _lora_files(spec):
 
 def _lora_models(host):
     """Models that take LoRAs (not the upscaler)."""
-    return [m for m in npu_worker.available_models(host) if npu_worker.model_spec(host, m)["kind"] != "upscale"]
+    return [m for m in npu_worker.available_models(host) if npu_worker.model_spec(host, m)["kind"] != "upscale" and npu_worker.model_spec(host, m)["lora"]]
 
 
 def model_loras():
@@ -300,6 +331,10 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
         raise ValueError("width and height must be multiples of 16")
     host = npu_worker.default_host_dir()
     spec = npu_worker.model_spec(host, model)
+    if min(width, height) < spec["min_size"]:
+        raise ValueError(f"{model} makes images from {spec['min_size']} to 2048 pixels per side")
+    if not spec["lora"] and (lora_stack or lora_file.strip() or lora not in ("none", "config default")):
+        raise ValueError(f"{model} takes no LoRA yet; set lora to none and disconnect Load LoRA nodes")
     images = list(input_images or [])
     if spec["kind"] == "edit" and not 1 <= len(images) <= spec["max_images"]:
         raise ValueError(f"{model} takes 1 to {spec['max_images']} images")
@@ -323,7 +358,8 @@ def run_text_to_image(model, prompt, seed, steps, width, height, lora, lora_scal
     png = os.path.join(tmp_dir, f"vigenflow_npu_{uuid.uuid4().hex}.png")
     refs, ref_tokens, ref_lines = [], 0, []
     try:
-        refs, ref_tokens, ref_lines = _prepare_references(images, tmp_dir, input_limit, spec["reference_token_limit"])
+        refs, ref_tokens, ref_lines = _prepare_references(images, tmp_dir, input_limit, spec["reference_token_limit"],
+                                                          spec["reference_preparation"])
         if lora == "config default":   # no --lora: the host merges the enabled entries with their own scales
             lora, scale = None, None
         else:
@@ -511,7 +547,7 @@ class VigenFlowTextToImage:
 
 class VigenFlowImageEdit:
     """Prompt + reference images -> image with a VigenFlow edit model (FLUX.2 Klein 4B Edit: 1-4
-    references; Qwen-Image 2.1 Turbo Edit: 1-10). Text encoder, reference encoder, denoising and VAE
+    references; Qwen-Image 2.1 Turbo Edit and FLUX.3 image klein Edit: 1-10). Text encoder, reference encoder, denoising and VAE
     decode run in its run.exe."""
 
     @classmethod

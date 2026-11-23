@@ -13,6 +13,7 @@ Everything runs on the NPU.
 | **Krea 2 Turbo** | `krea2-turbo` | 8 | ~45 s | ✅ | ✅ |
 | **Z-Image-Turbo** | `z-image-turbo` | 4 or 8 | ~18 s | ✅ | ✅ |
 | **Qwen Image 2.1 Turbo** | `qwen-image-2.1-turbo` | 8 | ~31 s | ✅ | ✅ |
+| **FLUX.3 image klein** (new) | `flux3-image-klein` | 16 | ~31 s | — | ✅ |
 
 ### ✏️ Image-to-Image (Editing and Upscaling)
 
@@ -20,11 +21,16 @@ Everything runs on the NPU.
 | --- | --- | ---: | ---: | :---: | :---: |
 | **FLUX.2-klein-4B Edit** | `flux2-klein-4B-edit` | 4 | ~17 s | ✅ | ✅ |
 | **Qwen Image 2.1 Turbo Edit** | `qwen-image-2.1-turbo-edit` | 8 | ~45 s | ✅ | ✅ |
+| **FLUX.3 image klein Edit** (new) | `flux3-image-klein-edit` | 16 | ~75 s | — | ✅ |
 | **SeedVR2-3B** (upscaling) | `seedvr2-3B` | 1 | ~5.5 s | ✅ | ✅ |
 
 The times are approximate NPU time for one 1024 × 1024 image (Z-Image-Turbo at 4 steps). Editing
 times are for one reference image; SeedVR2-3B's is for an upscale to 1024 × 1024. Loading the model
 comes on top, see [Behaviour](#behaviour).
+
+The two FLUX.3 image klein models come with the VigenFlow
+[Beta 6](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.6) engine and run on Ubuntu
+for now; on Windows the node still uses the Beta 5 engine, which has the other models.
 
 ## Requirements
 
@@ -34,10 +40,11 @@ comes on top, see [Behaviour](#behaviour).
 | Processor | Ryzen AI with an XDNA 2 NPU | Ryzen AI with an XDNA 2 NPU |
 | NPU driver | AMD XRT with the amdxdna driver (`/dev/accel/accel0`) | AMD NPU driver ("NPU Compute Accelerator Device" in Device Manager) |
 | Libraries | Boost.ProgramOptions 1.83: `sudo apt install libboost-program-options1.83.0` | none: the release ships its DLLs |
-| VigenFlow engine | `vgf_0.2.0-beta.5_ubuntu_amd64.zip` (about 35 MB) | `vgf_0.2.0-beta.5_windows_amd64.zip` (about 39 MB) |
+| VigenFlow engine | `vgf_0.2.0-beta.6_ubuntu_amd64.zip` (about 45 MB) | `vgf_0.2.0-beta.5_windows_amd64.zip` (about 39 MB) |
 
-The node picks the engine for your system, downloads it from the
-[VigenFlow release](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.5) on first use and
+The node picks the engine for your system, downloads it from the VigenFlow release
+([Beta 6](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.6) on Ubuntu,
+[Beta 5](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.5) on Windows) on first use and
 checks its SHA256. It also checks the NPU and libraries and says what is missing. Any ComfyUI
 install works: a git clone with a virtual environment, the Windows portable build or ComfyUI
 Desktop. ComfyUI's own PyTorch nodes can run on the CPU (`--cpu`); the VigenFlow nodes always use the NPU.
@@ -70,7 +77,7 @@ Desktop. ComfyUI's own PyTorch nodes can run on the CPU (`--cpu`); the VigenFlow
    add a Load Image node to Edit Prompt's `image_2` for a second reference) or **vigenflow_upscale**
    (or drag [`example_workflows/vigenflow_text_to_image.json`](example_workflows/vigenflow_text_to_image.json)
    onto the canvas), pick a model and click **Run**. The first image of each model downloads its
-   weights into `ComfyUI/models/vigenflow/<model>/` (8–27 GB; progress in the ComfyUI console).
+   weights into `ComfyUI/models/vigenflow/<model>/` (8–27 GB; FLUX.3 11 GB; progress in the ComfyUI console).
    Already have the weights (for example the VigenFlow package's `all_model_weights`)? Set
    `weights_dir` in [`vigenflow_settings.json`](#settings-vigenflow_settingsjson-optional) first.
 
@@ -92,16 +99,18 @@ show correctly. With ComfyUI Desktop, restart the app instead.
 
 ## Model licenses
 
-Krea 2 Turbo (Krea 2 Community License) and Qwen-Image 2.1 Turbo (Qwen Research License,
-research and evaluation only) download only after you accept their terms. Read them on
-[Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) and
-[Qwen-Image 2.1 Turbo](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo), then turn on
+Krea 2 Turbo (Krea 2 Community License), Qwen-Image 2.1 Turbo (Qwen Research License,
+research and evaluation only) and FLUX.3 image klein (FLUX Kommunity License: non-commercial, and
+commercial use of the images only below USD 5 million annual revenue) download only after you
+accept their terms. Read them on [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo),
+[Qwen-Image 2.1 Turbo](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo) and
+[FLUX.3 image klein](https://huggingface.co/black-forest-labs/flux-3-image-klein), then turn on
 **accept_license** on the Text to Image or Image Edit node (it means "I agree"; it is greyed out for
 models that do not need it). To accept once for every workflow instead, create
 `vigenflow_settings.json` in this folder and restart ComfyUI:
 
 ```json
-{ "accept_licenses": ["krea2_turbo", "qwen_image_2_1_turbo"] }
+{ "accept_licenses": ["krea2_turbo", "qwen_image_2_1_turbo", "flux3_image_klein"] }
 ```
 
 ## Nodes (category NPU)
@@ -121,13 +130,19 @@ models that do not need it). To accept once for every workflow instead, create
 | **VigenFlow: Save Image** | Saves to `output_dir` from `vigenflow_settings.json`, else ComfyUI's output folder |
 
 **Size:** `aspect_ratio` (1:1, 4:3, 3:4, 3:2, 2:3, 16:9, 9:16) with sizes of that ratio, or
-`Custom` width and height (16–2048, multiples of 16).
+`Custom` width and height (16–2048, multiples of 16; FLUX.3 64–2048).
 **Steps:** 0 uses the model's default (FLUX.2 4, FLUX.1 4, Krea 2 8, Qwen-Image 8, Z-Image 8,
-FLUX.2 Edit 4, Qwen-Image Edit 8).
+FLUX.3 16, FLUX.2 Edit 4, Qwen-Image Edit 8, FLUX.3 Edit 16).
 
 **Qwen-Image 2.1 Turbo Edit** uses the Qwen-Image 2.1 Turbo weights (and the same license,
 see Model licenses) and takes up to 10 references within 16,384 reference tokens: connect
 image_1–image_4 on Edit Prompt and more through its `references` input (VigenFlow: Reference Images).
+
+**FLUX.3 image klein Edit** uses the FLUX.3 image klein weights (and the same license) and takes
+up to 10 references with no token budget. The worker resizes them itself, as the official FLUX.3
+pipeline does: one reference to at most 4 megapixels, several to at most 1024 × 1024 each. The
+node lists, for each reference, the size FLUX.3 uses and its tokens. The FLUX.3 models take no
+LoRA yet (set `lora` to none and leave `lora_stack` unconnected).
 
 **Editing output size** (on Image Edit, or from Edit Output Size), as in the VigenFlow Studio:
 `keep_ratio` (default on) fits the first image's shape inside the chosen size (1024 × 1024 →
@@ -154,6 +169,8 @@ the ones the engine ships with (downloaded on first use) and your own `.safetens
 | Krea 2 Turbo | `krea2_turbo` |
 | Qwen-Image 2.1 Turbo | `qwen_image_2_1_turbo` |
 | Z-Image Turbo | `z_image_turbo` |
+
+FLUX.3 image klein has no LoRAs yet.
 
 To delete one of your files, delete it from that folder and reload the page.
 
@@ -193,6 +210,7 @@ Include a LoRA's trigger words in the prompt (they are printed in the console).
 - Cancel in ComfyUI stops the run or the download.
 - Peak RAM of the model process is printed for each image: about 8 GB for FLUX.2, up to 18 GB
   for Krea 2.
+- The FLUX.3 run.exe has no worker mode, so on Ubuntu too each FLUX.3 image is one ordinary run.
 
 ## Settings (`vigenflow_settings.json`, optional)
 
@@ -213,12 +231,13 @@ Paths are absolute or relative to this folder. On Windows write them with `/` or
 
 Restart ComfyUI after changing this file.
 
-**Without internet access**, download the engine zip for your system from the
-[release](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.5) on another computer and
+**Without internet access**, download the engine zip for your system from the release
+([Beta 6](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.6) for Ubuntu,
+[Beta 5](https://github.com/jia1217/vigenflow/releases/tag/v0.2.0-beta.5) for Windows) on another computer and
 install it from that copy (the SHA256 is still checked):
 
 ```bash
-VIGENFLOW_ENGINE_ZIP=/path/to/vgf_0.2.0-beta.5_ubuntu_amd64.zip python install.py
+VIGENFLOW_ENGINE_ZIP=/path/to/vgf_0.2.0-beta.6_ubuntu_amd64.zip python install.py
 ```
 
 ```powershell
@@ -243,6 +262,7 @@ timings and peak RAM.
 The ComfyUI-vigenflow source code is licensed under the [Apache License 2.0](LICENSE).
 
 Model weights are **not** covered by this license. Each model and LoRA keeps its original
-license; Krea 2 Turbo (Krea 2 Community License, limited commercial use) and Qwen-Image 2.1 Turbo
-(Qwen Research License, research and evaluation only) are not Apache 2.0. See VigenFlow's
+license; Krea 2 Turbo (Krea 2 Community License, limited commercial use), Qwen-Image 2.1 Turbo
+(Qwen Research License, research and evaluation only) and FLUX.3 image klein (FLUX Kommunity
+License, non-commercial with limited commercial use of outputs) are not Apache 2.0. See VigenFlow's
 [MODEL_LICENSES.md](https://github.com/jia1217/vigenflow/blob/main/MODEL_LICENSES.md) for each model.

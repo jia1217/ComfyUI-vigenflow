@@ -136,6 +136,8 @@ def load_settings(host_dir=NODE_DIR):
             npu = os.path.normpath(os.path.join(engine["dir"], entry["npu_files"])) if entry.get("npu_files") else None
         else:
             raise WorkerError(f"models.{name} in {filename} needs an id (engine model) or a host_dir")
+        extra_npu = [os.path.normpath(os.path.join(engine["dir"], rel)) for rel in entry.get("extra_npu_files", [])] \
+            if not entry.get("host_dir") else []   # more NPU folders the worker reads (FLUX.3 Edit: edit/)
         weights = _path(host_dir, entry.get("weights_path"), f"models.{name}.weights_path", filename)
         weights_id = entry.get("weights_id") or model_id   # an edit model uses its base model's weights
         kind = entry.get("kind", "text_to_image")
@@ -147,7 +149,10 @@ def load_settings(host_dir=NODE_DIR):
             "max_images": int(entry.get("max_images", 1)) if kind == "edit" else 0,
             "reference_token_limit": int(entry.get("reference_token_limit", 0)),   # 0: no budget
             "worker": entry.get("worker", True),   # false: run.exe has no worker mode (one run per image)
-            "host_dir": host, "npu_files_path": npu,
+            "host_dir": host, "npu_files_path": npu, "extra_npu_files": extra_npu,
+            "lora": entry.get("lora", True),        # false: the worker takes no LoRA (FLUX.3)
+            "min_size": int(entry.get("min_size", 16)),   # smallest image side the worker accepts
+            "reference_preparation": entry.get("reference_preparation", ""),   # "flux3": worker resizes refs
             "weights_path": weights or (os.path.join(weights_dir, weights_id) if weights_id else None),
             "weights_given": weights is not None,
             "weights_folder": weights_id, "license": entry.get("license"),
@@ -295,7 +300,7 @@ class NPUWorker:
         cmd = [exe] + ([] if self.one_shot else ["--mode", "performance", "--worker"]) + \
               ([] if self.upscale else ["--height", str(height), "--width", str(width)])
         self._size = height
-        if not self.upscale:   # SeedVR2 takes no LoRA
+        if not self.upscale and spec.get("lora", True):   # SeedVR2 and FLUX.3 take no LoRA
             if lora_stack:   # Load LoRA nodes: own list, one strength per LoRA, no --lora_scale
                 self._lora_config, names = write_lora_stack(lora_stack)
                 cmd += ["--lora_config", self._lora_config]
